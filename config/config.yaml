@@ -1,0 +1,107 @@
+
+
+main_output_dir: example_output/
+
+sample_tbl: config/ward_ipsc_example_sample_tbl.csv
+
+annotation_gtf: path/to/gtf
+
+# Put "none" for now. Other options possibly added in future...
+pre_stringtie_processing: "none"
+
+# What is strandedness of library prep used in samples?
+# "--rf" - library is stranded with read 2 corresponding to transcribed strand ('fr-firststrand'/ 'reverse')
+# "--fr" - library is stranded with read 1 corresponding to transcribed strand ('fr-secondstrand'/ 'stranded')
+# "" - library is unstranded
+# Handy blog posts if unsure:
+# https://rnabio.org/module-09-appendix/0009/12/01/StrandSettings/
+# https://littlebitofdata.com/en/2017/08/strandness_in_rnaseq/
+strandedness: "--rf"
+
+####------
+## Stringtie options/parameters
+####------
+
+# Use annotated poly(A) sites to help guide transcript assembly?
+# put True if yes, False if no (NO QUOTES around True/False)
+use_point_features: False
+
+# Path to 4 column TSV file of point features passed to '--ptf'
+# Columns are <chromosome> <coordinate> <strand> <type (TSS/CPAS)>
+# To generate, can use <scripts/bed_to_point_features.py> (currently just with PolyASite atlas v2)
+# Only needed if use_point_features is set to True
+point_features_path: path/to/point_features.tsv
+
+
+# Default: 0.01
+min_isoform_fraction_abundance: 0.01
+
+# Default: 200
+min_isoform_length: 200
+
+# True or False (NO QUOTES)
+# StringTie Default: False
+# PAPA Default: False
+report_gene_abundances: False
+gene_abundances_suffix: ".gene_abundances.tsv"
+
+# True or False (NO QUOTES)
+# StringTie Default: False
+# PAPA Default: True
+report_covered_annot_txipts: True
+covered_txipts_suffix: ".annotated.fully_covered.gtf"
+
+# Junctions should have spliced reads aligning with at least X overhang on either side
+# passed to <-a> flag
+# Must be an integer
+# Default: 10
+min_junction_overhang: 10
+
+# Junctions should have at least n spliced reads aligning across it
+# Can be a fraction
+# float
+# Default: 1
+min_junction_reads: 1
+
+# Trim ends of assembled transcripts based on sudden drops in coverage?
+# controls whether <-t> flag is passed
+# Logical - True or False (NO QUOTES)
+# Default: False
+disable_end_trimming: False
+
+# Minimum coverage for predicted transcripts to be reported in output
+# float
+# Default: 1
+min_txipt_coverage: 1
+
+# Minimum coverage for single-exon predicted transcripts
+# float
+# Default: 4.75
+min_single_exon_coverage: 4.75
+
+# Assemble transcripts conservatively, with options below
+# -t (disable_end_trimming: True), -c 1.5 (min_txipt_coverage: 1.5) -f 0.05 (min_isoform_fraction_abundance: 0.05)
+# controls whether <--conservative> flag is passed
+conservative_mode: False
+
+# Minimum locus gap separation value.
+# Reads that are mapped closer than this distance are merged together in the same processing bundle
+# int
+# Default: 50
+min_locus_gap: 50
+
+# Max fraction of multi-mapped reads allowed at a given locus
+# float between 0.0 & 1.0
+# Default: 0.95
+max_fraction_multi_mapped: 0.95
+
+# prefix for name of output transcripts (passed to <-l>)
+# String
+label: "PAPA"
+
+
+
+
+# Names of subdirectories for individual steps. No need to change these unless you don't like them!
+
+stringtie_subdir_name: stringtie/
