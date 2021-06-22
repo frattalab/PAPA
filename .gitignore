@@ -1,0 +1,6 @@
+
+*.log
+.snakemake/.DS_Store
+.DS_Store
+submissions/
+.snakemake/
