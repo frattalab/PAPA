@@ -5,3 +5,4 @@
 submissions/
 .snakemake/
 testing*
+envs/simple_*
