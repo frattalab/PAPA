@@ -28,7 +28,7 @@ rule stringtie:
 
 
     conda:
-        "env/placeholder.yaml"
+        "envs/placeholder.yaml"
 
     shell:
         """
@@ -48,5 +48,50 @@ rule stringtie:
         {params.conservative} \
         -g {params.min_locus_gap} \
         -M {params.max_multimap_frac}
+        -o {output}
+        """
+
+
+rule compose_gtf_list_stringtie:
+    input:
+        expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.assembled.gtf", sample = SAMPLES))
+    output:
+        txt = os.path.join(STRINGTIE_SUBDIR,"gtf_list.txt")
+    run:
+        with open(output.txt, 'w') as out:
+            print(*input, sep="\n", file=out)
+
+
+rule stringtie_merge:
+    input:
+        txt = os.path.join(STRINGTIE_SUBDIR,"gtf_list.txt")
+
+    output:
+        os.path.join(STRINGTIE_SUBDIR, "all_samples.merged.gtf")
+
+    params:
+        gtf = GTF,
+        min_len = config["min_length_merge"],
+        min_cov = config["min_cov_merge"],
+        min_fpkm = config["min_fpkm_merge"],
+        min_tpm = config["min_tpm_merge"],
+        min_frac = config["min_iso_frac_merge"],
+        keep_ri = "-i" if config["keep_retained_introns_merge"] else "",
+        label = config["label"]
+
+    conda:
+        "envs/placeholder.yaml"
+
+    shell:
+        """
+        stringtie {input.txt} --merge \
+        -G {params.gtf} \
+        -m {params.min_len} \
+        -c {params.min_cov} \
+        -F {params.min_fpkm} \
+        -T {params.min_tpm} \
+        -f {params.min_frac} \
+        {params.keep_ri} \
+        -l {params.label} \
         -o {output}
         """

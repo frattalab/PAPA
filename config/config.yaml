@@ -100,8 +100,19 @@ max_fraction_multi_mapped: 0.95
 label: "PAPA"
 
 
+# Merge parameters
+
+min_length_merge: 50
+min_cov_merge: 0
+min_fpkm_merge: 0
+min_tpm_merge: 0
+min_iso_frac_merge: 0.01
+
+# True/False (no quotes)
+keep_retained_introns_merge: False
 
 
+####
 # Names of subdirectories for individual steps. No need to change these unless you don't like them!
-
+####
 stringtie_subdir_name: stringtie/
