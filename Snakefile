@@ -9,7 +9,7 @@ configfile: "config/config.yaml"
 
 
 
-sample_tbl = pd.read_csv(config["sample_table_csv"], index_col="sample_name")
+sample_tbl = pd.read_csv(config["sample_table"], index_col="sample_name")
 
 SAMPLES = sample_tbl.index.tolist()
 OPTIONS = sample_tbl.to_dict(orient="index")
