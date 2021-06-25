@@ -1,5 +1,5 @@
 
-
+#MUST END WITH SLASH
 main_output_dir: example_output/
 
 sample_tbl: config/ward_ipsc_example_sample_tbl.csv
