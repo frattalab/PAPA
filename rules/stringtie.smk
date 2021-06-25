@@ -28,7 +28,7 @@ rule stringtie:
 
 
     conda:
-        "envs/placeholder.yaml"
+        "envs/papa.yaml"
 
     shell:
         """
@@ -80,7 +80,7 @@ rule stringtie_merge:
         label = config["label"]
 
     conda:
-        "envs/placeholder.yaml"
+        "envs/papa.yaml"
 
     shell:
         """
