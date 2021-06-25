@@ -36,7 +36,7 @@ rule all:
 def get_bam(sample, options, output_dir):
     '''
     Returns path to input bam file for given sample
-    If sample will undergo additional processing (not yet implemented), path will be output_dir/aligned/{sample}.bam
+    If sample will undergo additional processing (not yet implemented), path will be output_dir/<processing_step>/{sample}.bam
     If sample will not go additional to not be realigned, returns the path provided in the sample table/options
 
     params:

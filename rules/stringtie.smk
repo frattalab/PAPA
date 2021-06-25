@@ -2,7 +2,7 @@
 
 rule stringtie:
     input:
-        bam = lambda wildcards: get_bam(wildcards.sample, OPTIONS),
+        bam = lambda wildcards: get_bam(wildcards.sample, OPTIONS, OUTPUT_DIR),
         gtf = GTF,
         pas = config["polya_site_point_features"] if config["use_point_features"] else ""
 
