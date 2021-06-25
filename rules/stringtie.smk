@@ -54,7 +54,7 @@ rule stringtie:
 
 rule compose_gtf_list_stringtie:
     input:
-        expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.assembled.gtf", sample = SAMPLES))
+        expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.assembled.gtf"), sample = SAMPLES)
     output:
         txt = os.path.join(STRINGTIE_SUBDIR,"gtf_list.txt")
     run:
