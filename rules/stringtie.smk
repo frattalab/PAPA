@@ -32,7 +32,7 @@ rule stringtie:
     shell:
         """
         stringtie {input.bam} \
-        -G {input.gtf} \
+        -G {params.gtf} \
         {params.strandedness} \
         {params.point_feats} \
         -l {params.label} \
