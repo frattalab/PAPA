@@ -1,0 +1,30 @@
+__resources__:
+  gpu:
+    - "gpu"
+    - "nvidia_gpu"
+
+__options__:
+  jc:
+    - "jc"
+    - "jclass"
+    - "job_class"
+
+__default__:
+  join: yes
+  output: {config.main_output_dir}logs/sge/snakejob.{rulename}.{jobid}.log
+  error: {config.main_output_dir}logs/sge/snakejob.{rulename}.{jobid}.log
+  h_vmem: 2G
+  h_rt: 1:0:0
+
+#parallel_environment is alias for -pe (number of cores for parallel processing)
+#runtime is alias for -h_rt
+
+stringtie:
+  h_vmem: 16G
+  parallel_environment: 4
+  runtime: 24:00:00
+
+stringtie_merge:
+  h_vmem: 8G
+  parallel_environment: 4
+  runtime: 24:00:00
