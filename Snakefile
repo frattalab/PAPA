@@ -19,12 +19,13 @@ OPTIONS = sample_tbl.to_dict(orient="index")
 OUTPUT_DIR = os.path.join(config["main_output_dir"],"")
 STRINGTIE_SUBDIR = os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"])
 
-localrules: all
+localrules: all, compose_gtf_list_stringtie
 
 
 rule all:
     input:
-    expand(os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"], "{sample}.assembled.gtf"), sample = SAMPLES )
+    expand(os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"], "{sample}.assembled.gtf"), sample = SAMPLES ),
+    os.path.join(STRINGTIE_SUBDIR, "all_samples.merged.gtf")
 
 
 
