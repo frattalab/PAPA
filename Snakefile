@@ -15,6 +15,8 @@ sample_tbl = pd.read_csv(config["sample_table_csv"], index_col="sample_name")
 SAMPLES = sample_tbl.index.tolist()
 OPTIONS = sample_tbl.to_dict(orient="index")
 
+GTF = config["annotation_gtf"]
+
 # Make sure it has a slash at end of path
 OUTPUT_DIR = os.path.join(config["main_output_dir"],"")
 STRINGTIE_SUBDIR = os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"])
