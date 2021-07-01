@@ -63,7 +63,7 @@ rule compose_gtf_list_stringtie:
 
 rule stringtie_merge:
     input:
-        txt = os.path.join(STRINGTIE_SUBDIR,"gtf_list.txt")
+        os.path.join(STRINGTIE_SUBDIR, "gtf_list.txt")
 
     output:
         os.path.join(STRINGTIE_SUBDIR, "all_samples.merged.gtf")
@@ -83,7 +83,7 @@ rule stringtie_merge:
 
     shell:
         """
-        stringtie {input.txt} --merge \
+        stringtie --merge \
         -G {params.gtf} \
         -m {params.min_len} \
         -c {params.min_cov} \
@@ -92,5 +92,6 @@ rule stringtie_merge:
         -f {params.min_frac} \
         {params.keep_ri} \
         -l {params.label} \
-        -o {output}
+        -o {output} \
+        {input}
         """
