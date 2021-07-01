@@ -46,7 +46,7 @@ rule stringtie:
         -s {params.min_se_cov} \
         {params.conservative} \
         -g {params.min_locus_gap} \
-        -M {params.max_multimap_frac}
+        -M {params.max_multimap_frac} \
         -o {output}
         """
 
