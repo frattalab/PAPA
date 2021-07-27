@@ -145,7 +145,6 @@ dependencies:
   - qt=5.12.9
   - qtconsole=5.1.0
   - qtpy=1.9.0
-  - ray=2.3.1
   - readline=8.1
   - scipy=1.6.3
   - send2trash=1.7.1
@@ -170,4 +169,41 @@ dependencies:
   - zipp=3.4.1
   - zlib=1.2.11
   - zstd=1.5.0
-    #prefix: /home/sam/miniconda3/envs/papa_pipeline
+  - pip:
+    - aiohttp==3.7.4.post0
+    - aiohttp-cors==0.7.0
+    - aioredis==1.3.1
+    - async-timeout==3.0.1
+    - blessings==1.7
+    - cachetools==4.2.2
+    - chardet==4.0.0
+    - charset-normalizer==2.0.3
+    - click==8.0.1
+    - colorama==0.4.4
+    - filelock==3.0.12
+    - google-api-core==1.31.0
+    - google-auth==1.33.1
+    - googleapis-common-protos==1.53.0
+    - gpustat==0.6.0
+    - grpcio==1.39.0
+    - hiredis==2.0.0
+    - idna==3.2
+    - msgpack==1.0.2
+    - multidict==5.1.0
+    - nvidia-ml-py3==7.352.0
+    - opencensus==0.7.13
+    - opencensus-context==0.1.2
+    - protobuf==3.17.3
+    - psutil==5.8.0
+    - py-spy==0.3.7
+    - pyasn1==0.4.8
+    - pyasn1-modules==0.2.8
+    - pydantic==1.8.2
+    - pyyaml==5.4.1
+    - ray==1.5.0
+    - redis==3.5.3
+    - requests==2.26.0
+    - rsa==4.7.2
+    - typing-extensions==3.10.0.0
+    - urllib3==1.26.6
+    - yarl==1.6.3
