@@ -1,10 +1,10 @@
 
 #MUST END WITH SLASH
-main_output_dir: example_output/
+main_output_dir: two_sample_example_output/
 
-sample_tbl: config/ward_ipsc_example_sample_tbl.csv
+sample_tbl: config/local_ward_ipsc_example_sample_tbl.csv
 
-annotation_gtf: path/to/gtf
+annotation_gtf: data/annotation/gencode.v34.annotation.gtf
 
 # Put "none" for now. Other options possibly added in future...
 pre_stringtie_processing: "none"
@@ -30,7 +30,17 @@ use_point_features: False
 # Columns are <chromosome> <coordinate> <strand> <type (TSS/CPAS)>
 # To generate, can use <scripts/bed_to_point_features.py> (currently just with PolyASite atlas v2)
 # Only needed if use_point_features is set to True
-point_features_path: path/to/point_features.tsv
+point_features_path: data/atlas.cluster.2.0.GRCh38.96_point_features.chr_prefix.tsv
+
+# 'any' or 'transcript'
+# when filtering assembled transcripts, valid should have intron chain match up until penultimate intron
+# Should these introns come from the same transcript ('transcript') i.e. only differs in last exon
+# Or should these introns be able to come from any transcript ('any')?
+intron_chain_filter_mode: "any"
+
+# Maximum number of consective 3'end non-matched introns for a transcript to be considered validW
+# Default: 2 (equivalent to allowing the penultimate exon of transcript to also be novel)
+max_terminal_non_match: 2
 
 
 # Default: 0.01
@@ -99,6 +109,9 @@ max_fraction_multi_mapped: 0.95
 # String
 label: "PAPA"
 
+# Stringtie reports assembled transcripts matching reference transcripts in its assembled GTF
+# Since these can't be novel they can be ignored for transcript filtering/analysis
+stringtie_ref_string: "reference_id"
 
 # Merge parameters
 

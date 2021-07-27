@@ -28,8 +28,8 @@ localrules: all, compose_gtf_list_stringtie
 
 rule all:
     input:
-        expand(os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"], "{sample}.assembled.gtf"), sample=SAMPLES),
-        os.path.join(STRINGTIE_SUBDIR, "all_samples.merged.gtf")
+        # expand(os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"], "{sample}.assembled.gtf"), sample=SAMPLES),
+        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.merged.gtf")
 
 
 
