@@ -1,4 +1,5 @@
-
+wildcard_constraints:
+    sample = "|".join(SAMPLES)
 
 rule stringtie:
     input:
