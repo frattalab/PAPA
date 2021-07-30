@@ -129,3 +129,4 @@ keep_retained_introns_merge: False
 # Names of subdirectories for individual steps. No need to change these unless you don't like them!
 ####
 stringtie_subdir_name: stringtie/
+logs_subdir_name: logs/
