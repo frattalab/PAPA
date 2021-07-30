@@ -134,7 +134,7 @@ def validate_matching_chain(df, max_terminal_non_match=2):
         return False
 
 
-def filter_transcripts_by_chain(novel_exons,ref_exons, match_type = "transcript", max_terminal_non_match=2, nb_cpu = 1):
+def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_introns, match_type = "transcript", max_terminal_non_match=2, nb_cpu = 1):
     '''
     '''
 
@@ -144,14 +144,26 @@ def filter_transcripts_by_chain(novel_exons,ref_exons, match_type = "transcript"
     assert match_type in ["transcript", "any"], "match_type must be one of 'transcript' or 'any'. value passed - {}".format(str(match_type))
 
     #1. Find introns by transcript & give each intron a unique ID
-    print("finding introns...")
+    # print("finding introns...")
+    # t1 = timer()
+
+    #novel_introns = introns_by_tx(novel_exons, nb_cpu=nb_cpu).sort()
+    #ref_introns = introns_by_tx(ref_exons, nb_cpu=nb_cpu).sort()
+
+    # t2 = timer()
+
+    # print("took {} (s)".format(t2 - t1))
+    print("filtering transcripts by intron chain matching...")
+
+    print("sorting all grs by position for safety...")
     t1 = timer()
 
-    novel_introns = introns_by_tx(novel_exons, nb_cpu=nb_cpu).sort()
-    ref_introns = introns_by_tx(ref_exons, nb_cpu=nb_cpu).sort()
+    novel_exons = novel_exons.sort()
+    novel_introns = novel_introns.sort()
+    ref_exons = ref_exons.sort()
+    ref_introns = ref_introns.sort()
 
     t2 = timer()
-
     print("took {} (s)".format(t2 - t1))
 
     print("adding intron_id column...")
@@ -164,8 +176,8 @@ def filter_transcripts_by_chain(novel_exons,ref_exons, match_type = "transcript"
     print("took {} s".format(t4 - t3))
 
     #2. Track number of introns in each novel transcript
-    novel_tx_intron_counts = (novel_introns.as_df()
-                              .groupby("transcript_id").size())
+    # novel_tx_intron_counts = (novel_introns.as_df()
+                              # .groupby("transcript_id").size())
 
 
     # novel_introns, ref_introns
@@ -196,12 +208,17 @@ def filter_transcripts_by_chain(novel_exons,ref_exons, match_type = "transcript"
     print("finding overlaps between novel and reference introns...")
 
     t7 = timer()
-    joined = novel_introns.join(ref_introns, strandedness="same", suffix ="_ref",nb_cpu=nb_cpu)
+
+    # Have to convert Starts and Ends to np.int64 to prevent left-join error
+    # https://github.com/biocore-ntnu/pyranges/issues/170
+    # TO DO: re-report
+    joined = pr.PyRanges(novel_introns.as_df(), int64=True).join(pr.PyRanges(ref_introns.as_df(), int64=True), strandedness="same", suffix ="_ref", nb_cpu=nb_cpu)
+
     t8 = timer()
 
     print("took {} s".format(t8 - t7))
 
-    #5. Filter for overlaps that exactly match (or differ by given tolerance)
+    #5. Filter for overlaps that exactly match (or differ by given tolerance - for now not supported)
     print("filtering overlaps for exact matches...")
 
     t9 = timer()
@@ -308,17 +325,93 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
     start = timer()
 
     print("reading in input gtf files, this can take a while...")
+    print("reading gtf containing novel assembled transcripts...")
+
+    s1 = timer()
     novel = pr.read_gtf(novel_path)
+    e1 = timer()
+
+    print("took {} s".format(e1 - s1))
+
+    print("reading gtf containing reference transcripts...")
+
+    s2 = timer()
     ref = pr.read_gtf(ref_path)
+    e2 = timer()
+
+    print("took {} s".format(e2 - s2))
+
+    print("extracting protein-coding & lncRNA gene types from reference annotation file...")
+
+    start2 = timer()
+    ref_pc = ref.subset(lambda df: df["gene_type"].isin(["protein_coding", "lncRNA"]), nb_cpu=nb_cpu)
+    end2 = timer()
+
+    print("took {} s".format(end2 - start2))
 
     print("extracting novel exons from input GTF file...")
-    novel_exons = novel.subset(lambda df: df["Feature"] == "exon", nb_cpu=nb_cpu)
 
-    print("extracting exons of protein_coding and lncRNA genes from input gtf file...")
-    ref_pc_exons = ref.subset(lambda df: (df["Feature"] == "exon") & (df["gene_type"].isin(["protein_coding", "lncRNA"])), nb_cpu=nb_cpu)
+    start4 = timer()
+    novel_exons = novel.subset(lambda df: df["Feature"] == "exon", nb_cpu=nb_cpu)
+    end4 = timer()
+
+    print("took {} s".format(end4 - start4))
+
+    print("extracting exons of protein_coding and lncRNA genes from reference annotation...")
+
+    start5 = timer()
+    ref_pc_exons = ref.subset(lambda df: df["Feature"] == "exon", nb_cpu=nb_cpu)
+    end5 = timer()
+
+    print("took {} s".format(end5 - start5))
+
+    print("finding introns for each reference transcript...")
+
+    start3 = timer()
+
+    try:
+        ref_pc_introns = ref_pc.features.introns(by="transcript", nb_cpu=nb_cpu)
+    except KeyError:
+        # Specific error with ray when execute introns func for the 2nd time in same script...
+        # KeyError: 'by'
+        # Whilst avoiding working out what's going on, I can run my super slow intron finding script...
+        print("pr.features.introns returned KeyError ('by'), using my hacky intron finding workaround...")
+        ref_pc_introns = introns_by_tx(ref_pc_exons, nb_cpu=nb_cpu)
+
+    end3 = timer()
+
+    print("took {} s".format(end3 - start3))
+
+    print("finding introns for each novel transcript...")
+
+    start1 = timer()
+
+    try:
+        novel_introns = novel.features.introns(by="transcript", nb_cpu=nb_cpu)
+    except KeyError:
+        # Specific error with ray when execute introns func for the 2nd time in same script...
+        # KeyError: 'by'
+        # Whilst avoiding working out what's going on, I can run my super slow intron finding script...
+        print("pr.features.introns returned KeyError ('by'), using my hacky intron finding workaround...")
+        novel_introns = introns_by_tx(novel_exons, nb_cpu=nb_cpu)
+
+    end1 = timer()
+
+    print("took {} s".format(end1 - start1))
 
     print("finding novel transcripts with valid matches in their intron chain to reference transcripts...")
-    valid_matches = filter_transcripts_by_chain(novel_exons, ref_pc_exons, match_type=match_by, max_terminal_non_match=max_terminal_non_match, nb_cpu=nb_cpu)
+
+    start6 = timer()
+    valid_matches = filter_transcripts_by_chain(novel_exons,
+                                                novel_introns,
+                                                ref_pc_exons,
+                                                ref_pc_introns,
+                                                match_type=match_by,
+                                                max_terminal_non_match=max_terminal_non_match,
+                                                nb_cpu=nb_cpu)
+    end6 = timer()
+
+    print("took {} s".format(end6 - start6))
 
     if isinstance(valid_matches, pd.Series):
         # match type was any
@@ -333,7 +426,7 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
 
     end = timer()
 
-    print("Completed: script took {} s".format(end - start))
+    print("Completed: script took {} s / {} min (3dp) ".format(round(end - start, 3), round((end - start) / 60, 3)))
 
 
 
