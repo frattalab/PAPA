@@ -18,8 +18,8 @@ GTF = config["annotation_gtf"]
 
 # Make sure it has a slash at end of path
 OUTPUT_DIR = os.path.join(config["main_output_dir"],"")
-STRINGTIE_SUBDIR = os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"])
-
+STRINGTIE_SUBDIR = os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"], "")
+LOG_SUBDIR = os.path.join(OUTPUT_DIR, config["logs_subdir_name"], "")
 
 include: "rules/stringtie.smk"
 

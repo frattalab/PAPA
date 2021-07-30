@@ -25,9 +25,11 @@ rule stringtie:
         min_locus_gap = config["min_locus_gap"],
         max_multimap_frac = config["max_fraction_multi_mapped"]
 
-
     conda:
         "../envs/papa.yaml"
+
+    log:
+        os.path.join(LOG_SUBDIR, "{sample}.stringtie_assemble.log")
 
     shell:
         """
@@ -47,7 +49,8 @@ rule stringtie:
         {params.conservative} \
         -g {params.min_locus_gap} \
         -M {params.max_multimap_frac} \
-        -o {output}
+        -o {output} \
+        2> {log}
         """
 
 rule extract_novel_stringtie:
@@ -62,9 +65,13 @@ rule extract_novel_stringtie:
 
     params:
         ref_string = config["stringtie_ref_string"]
+
+    log:
+        os.path.join(LOG_SUBDIR, "{sample}.extract_novel_stringtie.log")
+
     shell:
         """
-        grep -v '{params.ref_string}' {input} > {output}
+        grep -v '{params.ref_string}' {input} > {output} 2> {log}
         """
 
 rule intron_chain_filter:
@@ -86,6 +93,9 @@ rule intron_chain_filter:
     conda:
         "../envs/papa.yaml"
 
+    log:
+        os.path.join(LOG_SUBDIR, "{sample}.intron_chain_filter.log")
+
     resources:
         threads = 4
 
@@ -97,7 +107,8 @@ rule intron_chain_filter:
         -m {params.match_by} \
         -n {params.max_terminal_non_match} \
         -c {resources.threads} \
-        -o {output}
+        -o {output} \
+        2> {log}
         """
 
 
@@ -131,6 +142,9 @@ rule stringtie_merge:
     conda:
         "../envs/papa.yaml"
 
+    log:
+        os.path.join(LOG_SUBDIR, "stringtie_merge.log")
+
     shell:
         """
         stringtie --merge \
@@ -143,5 +157,6 @@ rule stringtie_merge:
         {params.keep_ri} \
         -l {params.label} \
         -o {output} \
-        {input}
+        {input} \
+        2> {log}
         """
