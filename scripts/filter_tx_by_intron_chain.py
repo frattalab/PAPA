@@ -8,12 +8,22 @@ import os
 import sys
 import logging
 from timeit import default_timer as timer
-
+from __future__ import print_function
 
 '''
 Filter assembled transcripts for those that match reference transcripts in their intron chain up until their penultimate intron
 This allows identification of novel last exons (conservatively), but limits addition of false positive transcripts
 '''
+
+
+def eprint(*args, **kwargs):
+    '''
+    Nice lightweight function to print to STDERR (saves typing, I'm lazy)
+    Credit: https://stackoverflow.com/questions/5574702/how-to-print-to-stderr-in-python (MarcH)
+    '''
+    print(*args, file=sys.stderr, **kwargs)
+
+
 
 
 def introns_from_df(df):
@@ -133,13 +143,120 @@ def validate_matching_chain(df, max_terminal_non_match=2):
     else:
         return False
 
+def stie_groupby_last_exon(df, exon_n_col, which="last"):
+    '''
+    '''
+
+    if (df["Strand"] == "+").all():
+        if which == "last":
+            return df[exon_n_col].idxmax()
+        elif which == "first":
+            return df[exon_n_col].idxmin()
+
+    elif (df["Strand"] == "-").all():
+        if which == "last":
+            return df[exon_n_col].idxmin()
+        elif which == "first":
+            return df[exon_n_col].idxmax()
+
+
+def filter_multi_exon(df, exon_n_col):
+    '''
+    Want transcripts with > 1 exon
+    '''
+    if df[exon_n_col].nunique() > 1:
+        return True
+    else:
+        return False
+
+
+def get_terminal_regions(gr,
+                   feature_col = "Feature",
+                   id_col = "transcript_id",
+                   region_number_col = "exon_number",
+                   source = None,
+                   which_region="last",
+                   filter_single = False,
+                   nb_cpu = 1):
+    '''
+    Return gr of last exons for each transcript_id
+    In process, region_number_col will be converted to type 'int'
+    StringTie merged GTFs (or whatever tool single_steps/stringtie_longreads.smk is using)
+    reports exon_number that DOES NOT RESPECT STRAND (from browsing in IGV)
+    i.e. for minus-strand - largest exon_number for transcript corresponds to FIRST EXON, not last
+    Annotated (i.e. Ensembl) reported exon_numbers DO RESPECT STRAND (i.e. max always = last exon)
+
+    if Do respect strand, put source = None (default)
+    if Don't respect strand, put source = "stringtie" (i.e. plus strand = max, minus strand = min)
+    '''
+
+    assert source in [None, "stringtie"]
+    assert which_region in ["first", "last"]
+    assert region_number_col in gr.columns.tolist()
+    assert feature_col in gr.columns.tolist()
+    assert id_col in gr.columns.tolist()
+
+    # Make sure only 'exon' features are in the gr
+    assert gr.as_df()[feature_col].drop_duplicates().tolist() == ["exon"], "only 'exon' entries should be present in gr"
+
+    # Make sure region_number_col is int
+    mod_gr = (gr.assign(region_number_col,
+                      lambda df: df[region_number_col].astype(int),
+                      nb_cpu = nb_cpu)
+             )
+
+
+    # Filter out single-exon transcripts
+    if filter_single:
+        print("Filtering for multi-exon transcripts...")
+        print("Before: {}".format(len(set(mod_gr.as_df()[id_col].tolist()))))
+
+        mod_gr = (mod_gr.apply(lambda df: (df.groupby(id_col)
+                                       .filter(lambda x: filter_multi_exon(df, region_number_col))
+                                      )
+                           ,
+                           nb_cpu=nb_cpu
+                          )
+                 )
+        print("After: {}".format(len(set(mod_gr.as_df()[id_col].tolist()))))
+
+
+
+
+    if source is None:
+        # source = None means that 1 = first region of group regardless of strand
+        # Pick last region entry by max region number for each transcript (id_col)
+        # Pick first region entry by min region number for each transcript (id_col)
+
+        if which_region == "last":
+            out_gr = mod_gr.apply(lambda df: df.iloc[df.groupby(id_col)[region_number_col].idxmax(),], nb_cpu = nb_cpu)
+
+        elif which_region == "first":
+            out_gr = mod_gr.apply(lambda df: df.iloc[df.groupby(id_col)[region_number_col].idxmin(),], nb_cpu = nb_cpu)
+
+    elif source == "stringtie":
+        # Numbering Doesn't respect strand - pick min if Minus strand, max if plus strand
+        out_gr = (mod_gr.apply(lambda df: df.iloc[(df.groupby(id_col)
+                                                  .apply(lambda df: stie_groupby_last_exon(df, region_number_col, which_region)
+                                                        )
+                                                 ),],
+                               nb_cpu = nb_cpu
+                              )
+                 )
+
+
+    return out_gr
+
 
 def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_introns, match_type = "transcript", max_terminal_non_match=2, nb_cpu = 1):
     '''
     '''
 
-    novel_cols_to_keep = ["Feature","transcript_id"]
-    ref_cols_to_keep = ["Feature", "transcript_id", "gene_id", "gene_name"]
+    # Only keep essential columns (or those with potentially useful info) to save on memory
+    # TO DO: this should really happen in main
+
+    novel_cols_to_keep = [col for col in ["Feature","transcript_id"] if col in novel_exons.columns.tolist()]
+    ref_cols_to_keep = [col for col in ["Feature", "transcript_id", "gene_id", "gene_name"] if col in ref_exons.columns.tolist()]
 
     assert match_type in ["transcript", "any"], "match_type must be one of 'transcript' or 'any'. value passed - {}".format(str(match_type))
 
@@ -319,53 +436,174 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
         return filt_novel_ref_match_info[["transcript_id_novel","transcript_id_ref"]].drop_duplicates()
 
 
+def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info, nb_cpu=1):
+    '''
+    Function to return novel last exon transcripts occurring within annotated first exons,
+    In which the 3'end boundary of the novel first exon exactly matches an annotated first exon
+    These transcript types cannot have valid intron chain match but can still produce valid last exon isoforms
+    A well known e.g. of this isoform type is TDP-43 depletion sensitive STMN2 isoform
+    '''
+    start = timer()
+    eprint("finding novel last exon isoforms contained within annotated first introns...")
+
+    #1 - Pull out non-chain matched novel isoforms
+    eprint("extracting non-chain matched novel isoforms...")
+    s1 = timer()
+
+    if isinstance(chain_match_info, pd.Series):
+        # match type was any
+        novel_exons_nm = novel_exons.subset(lambda df: ~df["transcript_id"].isin(set(chain_match_info.tolist())), nb_cpu=nb_cpu)
+
+
+
+    elif isinstance(chain_match_info, pd.DataFrame):
+        # match_by/match_type was transcript
+        novel_exons_nm = novel_exons.subset(lambda df: ~df["transcript_id"].isin(set(chain_match_info["transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
+
+    e1 = timer()
+    eprint("took {} s".format(e1 - s1))
+
+    #2 -Extract last exons of non-chain matched novel isoforms
+    eprint("extracting last exons of non-chain matched novel isoforms")
+    s2 = timer()
+
+    novel_nm_last_exons = get_terminal_regions(novel_exons_nm,
+                                               region_number_col="exon_number",
+                                               source="stringtie",
+                                               filter_single=True,
+                                               which_region="last",
+                                               nb_cpu=nb_cpu)
+
+    e2 = timer()
+
+    eprint("took {} s".format(e2 - s2))
+
+    #3 - Extract first introns from ref transcripts
+    eprint("extracting first introns from reference transcripts...")
+
+    s3 = timer()
+    ref_first_introns = get_terminal_regions(ref_introns,
+                                             region_number_col="intron_number",
+                                             source=None,
+                                             filter_single=False,
+                                             which_region="first",
+                                             nb_cpu=nb_cpu
+                                             )
+
+    e3 = timer()
+    eprint("took {} s".format(e3 - s3))
+
+    #2.3 - find last exons of non-matched txs completely contained within annotated first introns
+    eprint("finding novel last exons completely contained within annotated first introns...")
+
+    s4 = timer()
+    novel_nm_fi = pr.PyRanges(novel_nm_last_exons.as_df(), int64=True).overlap(ref_first_introns,
+                                                                               how="containment",
+                                                                               strandedness="same",
+                                                                               #nb_cpu=nb_cpu
+                                                                               )
+    e4 = timer()
+    eprint("took {} s".format(e4 - s4))
+
+    #2.5 - Get 3'ends of first exons of transcripts with first-intron contained last exons
+    eprint("finding 3'ends of first exons of novel txipts with last exons fully contained within annotated introns...")
+    s5 = timer()
+
+    novel_nm_fi_fe_3p = (novel_exons_nm.subset(lambda df:
+                                            df["transcript_id"].isin(set(novel_nm_fi.transcript_id.tolist())),
+                                            nb_cpu=nb_cpu
+                                              )
+                                              .three_end()
+                        )
+
+    e5 = timer()
+    eprint("took {} s".format(e5 - s5))
+
+    #2.6 - Get 3'ends of first exons of reference transcripts
+    eprint("finding 3'ends of first exons of reference transcripts...")
+    s6 = timer()
+
+    ref_first_exons_3p = (get_terminal_regions(ref_exons,
+                                             region_number_col="exon_number",
+                                             source=None,
+                                             filter_single=True,
+                                             which_region="first",
+                                             nb_cpu=nb_cpu
+                                            )
+                          .three_end()
+                         )
+
+    e6 = timer()
+    eprint("took {} s".format(e6 - s6))
+
+    # 2.7 - Find first-intron contained novel LE isoforms with the outgoing SJ of first exon matching a ref first exon
+    eprint("finding first exon exact 3'end matches between novel and reference first exons...")
+    s7 = timer()
+
+    first_intron_contained_match = novel_nm_fi_fe_3p.join(ref_first_exons_3p,
+                                                          strandedness="same",
+                                                          suffix="_ref",
+                                                          nb_cpu=nb_cpu
+                                                         )
+
+    e7 = timer()
+    eprint("took {} s".format(e7 - s7))
+
+    first_intron_contained_match = first_intron_contained_match.as_df()[["transcript_id","transcript_id_ref"]].rename({"transcript_id": "transcript_id_novel"}, axis=1
+
+    if isinstance(chain_match_info, pd.Series):
+        return pd.concat([pd.DataFrame(chain_match_info), first_intron_contained_match]).reset_index(drop=True)
+
+    elif isinstance(chain_match_info, pd.DataFrame):
+        return pd.concat(chain_match_info, first_intron_contained_match).reset_index(drop=True)
+
 def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu):
     '''
     '''
     start = timer()
 
-    print("reading in input gtf files, this can take a while...")
-    print("reading gtf containing novel assembled transcripts...")
+    eprint("reading in input gtf files, this can take a while...")
+    eprint("reading gtf containing novel assembled transcripts...")
 
     s1 = timer()
     novel = pr.read_gtf(novel_path)
     e1 = timer()
 
-    print("took {} s".format(e1 - s1))
+    eprint("took {} s".format(e1 - s1))
 
-    print("reading gtf containing reference transcripts...")
+    eprint("reading gtf containing reference transcripts...")
 
     s2 = timer()
     ref = pr.read_gtf(ref_path)
     e2 = timer()
 
-    print("took {} s".format(e2 - s2))
+    eprint("took {} s".format(e2 - s2))
 
-    print("extracting protein-coding & lncRNA gene types from reference annotation file...")
+    eprint("extracting protein-coding & lncRNA gene types from reference annotation file...")
 
     start2 = timer()
     ref_pc = ref.subset(lambda df: df["gene_type"].isin(["protein_coding", "lncRNA"]), nb_cpu=nb_cpu)
     end2 = timer()
 
-    print("took {} s".format(end2 - start2))
+    eprint("took {} s".format(end2 - start2))
 
-    print("extracting novel exons from input GTF file...")
+    eprint("extracting novel exons from input GTF file...")
 
     start4 = timer()
     novel_exons = novel.subset(lambda df: df["Feature"] == "exon", nb_cpu=nb_cpu)
     end4 = timer()
 
-    print("took {} s".format(end4 - start4))
+    eprint("took {} s".format(end4 - start4))
 
-    print("extracting exons of protein_coding and lncRNA genes from reference annotation...")
+    eprint("extracting exons of protein_coding and lncRNA genes from reference annotation...")
 
     start5 = timer()
     ref_pc_exons = ref.subset(lambda df: df["Feature"] == "exon", nb_cpu=nb_cpu)
     end5 = timer()
 
-    print("took {} s".format(end5 - start5))
+    eprint("took {} s".format(end5 - start5))
 
-    print("finding introns for each reference transcript...")
+    eprint("finding introns for each reference transcript...")
 
     start3 = timer()
 
@@ -375,14 +613,14 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
         # Specific error with ray when execute introns func for the 2nd time in same script...
         # KeyError: 'by'
         # Whilst avoiding working out what's going on, I can run my super slow intron finding script...
-        print("pr.features.introns returned KeyError ('by'), using my hacky intron finding workaround...")
+        eprint("pr.features.introns returned KeyError ('by'), using my hacky intron finding workaround...")
         ref_pc_introns = introns_by_tx(ref_pc_exons, nb_cpu=nb_cpu)
 
     end3 = timer()
 
-    print("took {} s".format(end3 - start3))
+    eprint("took {} s".format(end3 - start3))
 
-    print("finding introns for each novel transcript...")
+    eprint("finding introns for each novel transcript...")
 
     start1 = timer()
 
@@ -392,14 +630,14 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
         # Specific error with ray when execute introns func for the 2nd time in same script...
         # KeyError: 'by'
         # Whilst avoiding working out what's going on, I can run my super slow intron finding script...
-        print("pr.features.introns returned KeyError ('by'), using my hacky intron finding workaround...")
+        eprint("pr.features.introns returned KeyError ('by'), using my hacky intron finding workaround...")
         novel_introns = introns_by_tx(novel_exons, nb_cpu=nb_cpu)
 
     end1 = timer()
 
-    print("took {} s".format(end1 - start1))
+    eprint("took {} s".format(end1 - start1))
 
-    print("finding novel transcripts with valid matches in their intron chain to reference transcripts...")
+    eprint("finding novel transcripts with valid matches in their intron chain to reference transcripts...")
 
     start6 = timer()
     valid_matches = filter_transcripts_by_chain(novel_exons,
@@ -411,7 +649,7 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
                                                 nb_cpu=nb_cpu)
     end6 = timer()
 
-    print("took {} s".format(end6 - start6))
+    eprint("took {} s".format(end6 - start6))
 
     if isinstance(valid_matches, pd.Series):
         # match type was any
@@ -426,7 +664,7 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
 
     end = timer()
 
-    print("Completed: script took {} s / {} min (3dp) ".format(round(end - start, 3), round((end - start) / 60, 3)))
+    eprint("Completed: script took {} s / {} min (3dp) ".format(round(end - start, 3), round((end - start) / 60, 3)))
 
 
 
