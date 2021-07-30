@@ -147,7 +147,7 @@ rule stringtie_merge_novel:
             "../envs/papa.yaml"
 
         log:
-            os.path.join(LOG_SUBDIR, "stringtie_merge_ref.log")
+            os.path.join(LOG_SUBDIR, "stringtie_merge_novel.log")
 
         shell:
             """
