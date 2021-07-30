@@ -123,12 +123,53 @@ rule compose_gtf_list_stringtie:
             print(*input, sep="\n", file=out)
 
 
-rule stringtie_merge:
+rule stringtie_merge_novel:
+    '''
+    Merge intron_chain_filtered transcripts only into a single GTF file of non-redundant NOVEL transcripts
+    This set does not include any reference transcripts
+    '''
+        input:
+            os.path.join(STRINGTIE_SUBDIR, "gtf_list.txt")
+
+        output:
+            os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.merged.gtf")
+
+        params:
+            min_len = config["min_length_merge"],
+            min_cov = config["min_cov_merge"],
+            min_fpkm = config["min_fpkm_merge"],
+            min_tpm = config["min_tpm_merge"],
+            min_frac = config["min_iso_frac_merge"],
+            keep_ri = "-i" if config["keep_retained_introns_merge"] else "",
+            label = config["label"]
+
+        conda:
+            "../envs/papa.yaml"
+
+        log:
+            os.path.join(LOG_SUBDIR, "stringtie_merge_ref.log")
+
+        shell:
+            """
+            stringtie --merge \
+            -m {params.min_len} \
+            -c {params.min_cov} \
+            -F {params.min_fpkm} \
+            -T {params.min_tpm} \
+            -f {params.min_frac} \
+            {params.keep_ri} \
+            -l {params.label} \
+            -o {output} \
+            {input} \
+            2> {log}
+            """
+
+rule stringtie_merge_ref:
     input:
         os.path.join(STRINGTIE_SUBDIR, "gtf_list.txt")
 
     output:
-        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.merged.gtf")
+        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged.gtf")
 
     params:
         gtf = GTF,
@@ -144,7 +185,7 @@ rule stringtie_merge:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "stringtie_merge.log")
+        os.path.join(LOG_SUBDIR, "stringtie_merge_ref.log")
 
     shell:
         """

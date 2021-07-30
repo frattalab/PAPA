@@ -26,18 +26,21 @@ include: "rules/stringtie.smk"
 
 localrules: all, compose_gtf_list_stringtie
 
+wildcard_constraints:
+    sample = "|".join(SAMPLES)
+
 rule all:
     input:
-        # expand(os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"], "{sample}.assembled.gtf"), sample=SAMPLES),
+        expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.no_ref_id.assembled.gtf"), sample=SAMPLES),
+        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged.gtf"),
         os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.merged.gtf")
-
 
 
 def get_bam(sample, options, output_dir):
     '''
     Returns path to input bam file for given sample
     If sample will undergo additional processing (not yet implemented), path will be output_dir/<processing_step>/{sample}.bam
-    If sample will not go additional to not be realigned, returns the path provided in the sample table/options
+    If sample will not go additional processing, returns the path provided in the sample table/options
 
     params:
         sample <str>
