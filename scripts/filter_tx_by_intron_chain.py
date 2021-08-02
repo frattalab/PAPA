@@ -436,6 +436,14 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
         return filt_novel_ref_match_info[["transcript_id_novel", "transcript_id_ref"]].drop_duplicates()
 
 
+def _join_grs(gr_left, gr_right, strandedness=None, how=None, report_overlap=False, slack=0, suffix="_b", nb_cpu=1):
+    '''
+    '''
+
+    return gr_left.join(gr_right, strandedness, how, report_overlap, slack, suffix, nb_cpu)
+
+
+
 def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info, nb_cpu=1):
     '''
     Function to return novel last exon transcripts occurring within annotated first exons,
@@ -496,13 +504,16 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     eprint("finding novel last exons completely contained within annotated first introns...")
 
     s4 = timer()
-    novel_nm_fi = pr.PyRanges(novel_nm_last_exons.as_df(), int64=True).overlap(ref_first_introns,
+    novel_nm_fi = pr.PyRanges(novel_nm_last_exons.as_df(), int64=True).overlap(pr.PyRanges(ref_first_introns.as_df(), int64=True),
                                                                                how="containment",
                                                                                strandedness="same",
                                                                                #nb_cpu=nb_cpu
                                                                                )
     e4 = timer()
     eprint("took {} s".format(e4 - s4))
+    n_tr = len(set(novel_nm_fi.transcript_id.tolist()))
+    eprint("number of novel tx with first intron contained annotated first introns - {}".format(n_tr))
+
 
     #2.5 - Get 3'ends of first exons of transcripts with first-intron contained last exons
     eprint("finding 3'ends of first exons of novel txipts with last exons fully contained within annotated introns...")
@@ -538,22 +549,51 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     eprint("finding first exon exact 3'end matches between novel and reference first exons...")
     s7 = timer()
 
-    first_intron_contained_match = novel_nm_fi_fe_3p.join(ref_first_exons_3p,
-                                                          strandedness="same",
-                                                          suffix="_ref",
-                                                          nb_cpu=nb_cpu
-                                                         )
+    try:
+        first_intron_contained_match = novel_nm_fi_fe_3p.join(ref_first_exons_3p,
+                                                              strandedness="same",
+                                                              suffix="_ref",
+                                                              nb_cpu=nb_cpu
+                                                              )
+    except KeyError:
+        # This is the 2nd join/introns in function call problem popping up again
+        #     how = kwargs["how"]; KeyError: 'how'
+        eprint("multithreaded run failed... trying single-threaded")
+
+        # first_intron_contained_match = novel_nm_fi_fe_3p.join(ref_first_exons_3p,
+        #                                                       how=None,
+        #                                                       strandedness="same",
+        #                                                       suffix="_ref",
+        #                                                       nb_cpu=1
+        #                                                       )
+
+        first_intron_contained_match = (_join_grs(novel_nm_fi_fe_3p,
+                                                  ref_first_exons_3p,
+                                                  how="left",
+                                                  strandedness="same",
+                                                  suffix="_ref",
+                                                  nb_cpu=1)
+                                        .subset(lambda df: df.Start_b != -1, nb_cpu=nb_cpu))
 
     e7 = timer()
     eprint("took {} s".format(e7 - s7))
 
-    first_intron_contained_match = first_intron_contained_match.as_df()[["transcript_id","transcript_id_ref"]].rename({"transcript_id": "transcript_id_novel"}, axis=1)
+    # eprint("first_intron_contained_match columns {}".format(first_intron_contained_match.columns))
 
-    if isinstance(chain_match_info, pd.Series):
-        return pd.concat([pd.DataFrame(chain_match_info), first_intron_contained_match]).reset_index(drop=True)
+    if len(first_intron_contained_match.as_df().index) == 0:
+        eprint("No first intron contained novel last exon isoforms had eactly matching 3'boundaries of reference first exon. Returning chain_match_info with no additional IDs...")
 
-    elif isinstance(chain_match_info, pd.DataFrame):
-        return pd.concat([chain_match_info, first_intron_contained_match]).reset_index(drop=True)
+        return chain_match_info
+
+    else:
+
+        first_intron_contained_match = first_intron_contained_match.as_df()[["transcript_id","transcript_id_ref"]].rename({"transcript_id": "transcript_id_novel"}, axis=1)
+
+        if isinstance(chain_match_info, pd.Series):
+            return pd.concat([pd.DataFrame(chain_match_info), first_intron_contained_match]).reset_index(drop=True)
+
+        elif isinstance(chain_match_info, pd.DataFrame):
+            return pd.concat([chain_match_info, first_intron_contained_match]).reset_index(drop=True)
 
 
 def _df_add_intron_number(df, out_col):
