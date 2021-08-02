@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-
+#! /usr/bin/env python3
+from __future__ import print_function
 import pyranges as pr
 import numpy as np
 import pandas as pd
@@ -8,7 +8,6 @@ import os
 import sys
 import logging
 from timeit import default_timer as timer
-from __future__ import print_function
 
 '''
 Filter assembled transcripts for those that match reference transcripts in their intron chain up until their penultimate intron
@@ -172,6 +171,7 @@ def filter_multi_exon(df, exon_n_col):
 
 def get_terminal_regions(gr,
                    feature_col = "Feature",
+                   feature_key = "exon",
                    id_col = "transcript_id",
                    region_number_col = "exon_number",
                    source = None,
@@ -197,7 +197,7 @@ def get_terminal_regions(gr,
     assert id_col in gr.columns.tolist()
 
     # Make sure only 'exon' features are in the gr
-    assert gr.as_df()[feature_col].drop_duplicates().tolist() == ["exon"], "only 'exon' entries should be present in gr"
+    assert gr.as_df()[feature_col].drop_duplicates().tolist() == [feature_key], "only {} entries should be present in gr".format(feature_key)
 
     # Make sure region_number_col is int
     mod_gr = (gr.assign(region_number_col,
@@ -433,7 +433,7 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
         return filt_novel_ref_match_info["transcript_id_novel"].drop_duplicates()
 
     elif match_type == "transcript":
-        return filt_novel_ref_match_info[["transcript_id_novel","transcript_id_ref"]].drop_duplicates()
+        return filt_novel_ref_match_info[["transcript_id_novel", "transcript_id_ref"]].drop_duplicates()
 
 
 def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info, nb_cpu=1):
@@ -443,7 +443,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     These transcript types cannot have valid intron chain match but can still produce valid last exon isoforms
     A well known e.g. of this isoform type is TDP-43 depletion sensitive STMN2 isoform
     '''
-    start = timer()
+    # start = timer()
     eprint("finding novel last exon isoforms contained within annotated first introns...")
 
     #1 - Pull out non-chain matched novel isoforms
@@ -453,8 +453,6 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     if isinstance(chain_match_info, pd.Series):
         # match type was any
         novel_exons_nm = novel_exons.subset(lambda df: ~df["transcript_id"].isin(set(chain_match_info.tolist())), nb_cpu=nb_cpu)
-
-
 
     elif isinstance(chain_match_info, pd.DataFrame):
         # match_by/match_type was transcript
@@ -483,6 +481,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
 
     s3 = timer()
     ref_first_introns = get_terminal_regions(ref_introns,
+                                             feature_key="intron",
                                              region_number_col="intron_number",
                                              source=None,
                                              filter_single=False,
@@ -524,14 +523,13 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     s6 = timer()
 
     ref_first_exons_3p = (get_terminal_regions(ref_exons,
-                                             region_number_col="exon_number",
-                                             source=None,
-                                             filter_single=True,
-                                             which_region="first",
-                                             nb_cpu=nb_cpu
-                                            )
-                          .three_end()
-                         )
+                                               region_number_col="exon_number",
+                                               source=None,
+                                               filter_single=True,
+                                               which_region="first",
+                                               nb_cpu=nb_cpu
+                                               )
+                          .three_end())
 
     e6 = timer()
     eprint("took {} s".format(e6 - s6))
@@ -549,13 +547,56 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     e7 = timer()
     eprint("took {} s".format(e7 - s7))
 
-    first_intron_contained_match = first_intron_contained_match.as_df()[["transcript_id","transcript_id_ref"]].rename({"transcript_id": "transcript_id_novel"}, axis=1
+    first_intron_contained_match = first_intron_contained_match.as_df()[["transcript_id","transcript_id_ref"]].rename({"transcript_id": "transcript_id_novel"}, axis=1)
 
     if isinstance(chain_match_info, pd.Series):
         return pd.concat([pd.DataFrame(chain_match_info), first_intron_contained_match]).reset_index(drop=True)
 
     elif isinstance(chain_match_info, pd.DataFrame):
-        return pd.concat(chain_match_info, first_intron_contained_match).reset_index(drop=True)
+        return pd.concat([chain_match_info, first_intron_contained_match]).reset_index(drop=True)
+
+
+def _df_add_intron_number(df, out_col):
+    '''
+
+    '''
+
+    n_exons = len(df.index)
+
+    # Note: (I think) dictionary unpacking is required so out_col can be a variable...
+
+    if (df["Strand"] == "+").all():
+        # first in order by Start position in each txipt = left-most start position (i.e. most 5')
+        return df.assign(**{out_col: list(range(1, n_exons + 1))})
+
+    elif (df["Strand"] == "-").all():
+        # firs in order by Start position in each txipt = most 3' is left-most start position
+        return df.assign(**{out_col: list(range(1, n_exons +1))[::-1]})
+
+
+def add_intron_number(introns, id_col = "transcript_id", out_col="intron_number", nb_cpu=1):
+    '''
+    '''
+
+    start = timer()
+
+    assert len(set(introns.as_df().Feature.tolist())) == 1, "only one feature type (e.g. all introns, all exons) should be present in gr"
+
+    # Sort by position (could add an nb_cpu here...)
+    introns = introns.sort()
+
+    introns_out = (introns.apply(lambda df:
+                                 df.groupby(id_col)
+                                 .apply(lambda x: _df_add_intron_number(x, out_col)),
+                                 nb_cpu=nb_cpu
+                                 ))
+
+
+    end = timer()
+    eprint("took {} s".format(end - start))
+
+    return introns_out
+
 
 def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu):
     '''
@@ -637,6 +678,22 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
 
     eprint("took {} s".format(end1 - start1))
 
+    # Need/want to make sure each introns object has a strand-aware intron number by transcript_id (i.e. 1 = first intron
+    try:
+        assert "intron_number" in ref_pc_introns.as_df().columns.tolist()
+    except AssertionError:
+        eprint("adding intron_number column to reference introns object...")
+        ref_pc_introns = add_intron_number(ref_pc_introns, nb_cpu=nb_cpu)
+
+
+    try:
+        assert "intron_number" in novel_introns.as_df().columns.tolist()
+
+    except AssertionError:
+        eprint("adding intron_number column to novel introns object...")
+        novel_introns = add_intron_number(novel_introns, nb_cpu=nb_cpu)
+
+
     eprint("finding novel transcripts with valid matches in their intron chain to reference transcripts...")
 
     start6 = timer()
@@ -651,7 +708,19 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
 
     eprint("took {} s".format(end6 - start6))
 
-    if isinstance(valid_matches, pd.Series):
+    eprint("finding novel last exons completely contained within annotated first introns...")
+    s7 = timer()
+
+    fi_valid_matches = filter_first_intron_tx(novel_exons,
+                                              ref_pc_exons,
+                                              ref_pc_introns,
+                                              valid_matches,
+                                              nb_cpu)
+
+    e7 = timer()
+    eprint("finding first intron novel isoforms - took {} s".format(e7 - s7))
+
+    if isinstance(fi_valid_matches, pd.Series):
         # match type was any
         valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(valid_matches.tolist())), nb_cpu=nb_cpu)
         valid_novel.to_gtf(out_gtf)
