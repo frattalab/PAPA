@@ -511,7 +511,9 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
                                                                                )
     e4 = timer()
     eprint("took {} s".format(e4 - s4))
-    n_tr = len(set(novel_nm_fi.transcript_id.tolist()))
+
+    tr_ids = set(novel_nm_fi.transcript_id.tolist())
+    n_tr = len(tr_ids)
     eprint("number of novel tx with first intron contained annotated first introns - {}".format(n_tr))
 
 
@@ -519,12 +521,15 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     eprint("finding 3'ends of first exons of novel txipts with last exons fully contained within annotated introns...")
     s5 = timer()
 
-    novel_nm_fi_fe_3p = (novel_exons_nm.subset(lambda df:
-                                            df["transcript_id"].isin(set(novel_nm_fi.transcript_id.tolist())),
-                                            nb_cpu=nb_cpu
+    novel_nm_fi_fe_3p = (get_terminal_regions(novel_exons_nm.subset(lambda df: df["transcript_id"].isin(tr_ids),
+                                                                    nb_cpu=nb_cpu
+                                                                    ),
+                                              which_region="first",
+                                              source="stringtie",
+                                              nb_cpu=nb_cpu
                                               )
-                                              .three_end()
-                        )
+                         .three_end()
+                         )
 
     e5 = timer()
     eprint("took {} s".format(e5 - s5))
