@@ -443,6 +443,13 @@ def _join_grs(gr_left, gr_right, strandedness=None, how=None, report_overlap=Fal
     return gr_left.join(gr_right, strandedness, how, report_overlap, slack, suffix, nb_cpu)
 
 
+def check_three_end(gr):
+    '''
+    '''
+    df = gr.as_df()
+
+    return all(df.Start == df.End)
+
 
 def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info, nb_cpu=1):
     '''
@@ -468,6 +475,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
 
     e1 = timer()
     eprint("took {} s".format(e1 - s1))
+
 
     #2 -Extract last exons of non-chain matched novel isoforms
     eprint("extracting last exons of non-chain matched novel isoforms")
@@ -512,6 +520,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     e4 = timer()
     eprint("took {} s".format(e4 - s4))
 
+
     tr_ids = set(novel_nm_fi.transcript_id.tolist())
     n_tr = len(tr_ids)
     eprint("number of novel tx with first intron contained annotated first introns - {}".format(n_tr))
@@ -534,6 +543,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     e5 = timer()
     eprint("took {} s".format(e5 - s5))
 
+
     #2.6 - Get 3'ends of first exons of reference transcripts
     eprint("finding 3'ends of first exons of reference transcripts...")
     s6 = timer()
@@ -550,6 +560,20 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     e6 = timer()
     eprint("took {} s".format(e6 - s6))
 
+
+    eprint("checking whether 3'end coordinates have been defined correctly...")
+
+    eprint("checking reference first exon 3'ends...")
+    if check_three_end(ref_first_exons_3p):
+        eprint("Start and End values are equal (impossible to have overlap)")
+        ref_first_exons_3p = ref_first_exons_3p.assign("End", lambda df: df.End + 1)
+
+    eprint("checking novel first exon 3'ends...")
+    if check_three_end(novel_nm_fi_fe_3p):
+        eprint("Start and End values are equal (impossible to have overlap)")
+        novel_nm_fi_fe_3p = novel_nm_fi_fe_3p.assign("End", lambda df: df.End + 1)
+
+
     # 2.7 - Find first-intron contained novel LE isoforms with the outgoing SJ of first exon matching a ref first exon
     eprint("finding first exon exact 3'end matches between novel and reference first exons...")
     s7 = timer()
@@ -562,7 +586,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
                                                               )
     except KeyError:
         # This is the 2nd join/introns in function call problem popping up again
-        #     how = kwargs["how"]; KeyError: 'how'
+        # how = kwargs["how"]; KeyError: 'how'
         eprint("multithreaded run failed... trying single-threaded")
 
         # first_intron_contained_match = novel_nm_fi_fe_3p.join(ref_first_exons_3p,
@@ -582,6 +606,8 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
 
     e7 = timer()
     eprint("took {} s".format(e7 - s7))
+
+
 
     # eprint("first_intron_contained_match columns {}".format(first_intron_contained_match.columns))
 
@@ -767,12 +793,12 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
 
     if isinstance(fi_valid_matches, pd.Series):
         # match type was any
-        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(valid_matches.tolist())), nb_cpu=nb_cpu)
+        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(fi_valid_matches.tolist())), nb_cpu=nb_cpu)
         valid_novel.to_gtf(out_gtf)
 
-    elif isinstance(valid_matches, pd.DataFrame):
+    elif isinstance(fi_valid_matches, pd.DataFrame):
         # match_by/match_type was transcript
-        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(valid_matches["transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
+        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(fi_valid_matches["transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
         valid_novel.to_gtf(out_gtf)
 
 
