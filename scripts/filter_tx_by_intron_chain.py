@@ -208,8 +208,8 @@ def get_terminal_regions(gr,
 
     # Filter out single-exon transcripts
     if filter_single:
-        print("Filtering for multi-exon transcripts...")
-        print("Before: {}".format(len(set(mod_gr.as_df()[id_col].tolist()))))
+        eprint("Filtering for multi-exon transcripts...")
+        eprint("Before: {}".format(len(set(mod_gr.as_df()[id_col].tolist()))))
 
         mod_gr = (mod_gr.apply(lambda df: (df.groupby(id_col)
                                        .filter(lambda x: filter_multi_exon(df, region_number_col))
@@ -218,7 +218,7 @@ def get_terminal_regions(gr,
                            nb_cpu=nb_cpu
                           )
                  )
-        print("After: {}".format(len(set(mod_gr.as_df()[id_col].tolist()))))
+        eprint("After: {}".format(len(set(mod_gr.as_df()[id_col].tolist()))))
 
 
 
@@ -270,9 +270,9 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
     # t2 = timer()
 
     # print("took {} (s)".format(t2 - t1))
-    print("filtering transcripts by intron chain matching...")
+    eprint("filtering transcripts by intron chain matching...")
 
-    print("sorting all grs by position for safety...")
+    eprint("sorting all grs by position for safety...")
     t1 = timer()
 
     novel_exons = novel_exons.sort()
@@ -281,16 +281,16 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
     ref_introns = ref_introns.sort()
 
     t2 = timer()
-    print("took {} (s)".format(t2 - t1))
+    eprint("took {} (s)".format(t2 - t1))
 
-    print("adding intron_id column...")
+    eprint("adding intron_id column...")
 
     t3 = timer()
     novel_introns = intron_id(novel_introns)
     ref_introns = intron_id(ref_introns)
     t4 = timer()
 
-    print("took {} s".format(t4 - t3))
+    eprint("took {} s".format(t4 - t3))
 
     #2. Track number of introns in each novel transcript
     # novel_tx_intron_counts = (novel_introns.as_df()
@@ -300,7 +300,7 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
     # novel_introns, ref_introns
 
     # 3. Store intron_ids for each transcript, sorted by intron_number (where 1 = first intron regardless of strand) in a df/Series
-    print("generating df of novel txipts sorted by intron number...")
+    eprint("generating df of novel txipts sorted by intron number...")
 
     t5 = timer()
 
@@ -316,13 +316,13 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
     novel_intron_ids_ordered = novel_intron_ids_ordered.loc[:,["transcript_id","intron_id","intron_number"]]
 
     t6 = timer()
-    print("took {} s".format(t6 - t5))
-#     print(novel_intron_ids_ordered.dtypes)
+    eprint("took {} s".format(t6 - t5))
+#     eprint(novel_intron_ids_ordered.dtypes)
 
 
     #4. Find novel introns with any overlap with reference introns
     # Inner join to add ref_rows to novel gr
-    print("finding overlaps between novel and reference introns...")
+    eprint("finding overlaps between novel and reference introns...")
 
     t7 = timer()
 
@@ -333,26 +333,26 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
 
     t8 = timer()
 
-    print("took {} s".format(t8 - t7))
+    eprint("took {} s".format(t8 - t7))
 
     #5. Filter for overlaps that exactly match (or differ by given tolerance - for now not supported)
-    print("filtering overlaps for exact matches...")
+    eprint("filtering overlaps for exact matches...")
 
     t9 = timer()
     joined = joined.subset(lambda df: abs(df.Start - df.Start_ref) + abs(df.End - df.End_ref) <= 0, nb_cpu=nb_cpu)
     t10 = timer()
 
-    print("took {} s".format(t10 - t9))
+    eprint("took {} s".format(t10 - t9))
 
     # Minimal info needed on matches between novel and reference introns
     joined = joined.as_df()[["transcript_id","intron_id","transcript_id_ref","intron_id_ref"]]
 
-#     print(joined.dtypes)
+#     eprint(joined.dtypes)
 
     #6. Join ordered novel introns with match info
     #7. Assign a simple tracker column 'match' of True (where intron is matched) and False (where intron is not matched)
 
-    print("preparing for filtering intron matches...")
+    eprint("preparing for filtering intron matches...")
     t11 = timer()
 
     if match_type == "any":
@@ -404,11 +404,11 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
         novel_ref_match_info["match"] = novel_ref_match_info["match"].replace("\w*", 1, regex=True)
 
     t12 = timer()
-    print("took {} s".format(t12 - t11))
+    eprint("took {} s".format(t12 - t11))
 
 
     # 8. Filter down matching transcripts to those that all ref introns except penultimate or all introns...
-    print("filtering for valid intron chain matches...")
+    eprint("filtering for valid intron chain matches...")
     t13 = timer()
     if match_type == "any":
         # Only need to check by novel transcript_id
@@ -424,7 +424,7 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
                                             )
                                     )
     t14 = timer()
-    print("took {} s".format(t14 - t13))
+    eprint("took {} s".format(t14 - t13))
 
 
     # Return simplified df of novel transcript_id & matching transcript_id if applicable
