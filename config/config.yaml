@@ -111,6 +111,7 @@ label: "PAPA"
 
 # Stringtie reports assembled transcripts matching reference transcripts in its assembled GTF
 # Since these can't be novel they can be ignored for transcript filtering/analysis
+# DEPRECATED - 3'UTR EXTENSIONS AND BLEEDTHROUGH EVENTS APPEAR TO BE ASSIGNED REFERENCE_ID
 stringtie_ref_string: "reference_id"
 
 # Merge parameters

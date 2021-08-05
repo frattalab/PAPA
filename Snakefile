@@ -31,7 +31,7 @@ wildcard_constraints:
 
 rule all:
     input:
-        expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.no_ref_id.assembled.gtf"), sample=SAMPLES),
+        expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.assembled.gtf"), sample=SAMPLES),
         os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged.gtf"),
         os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.merged.gtf")
 

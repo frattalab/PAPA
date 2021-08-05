@@ -54,36 +54,36 @@ rule stringtie:
         2> {log}
         """
 
-rule extract_novel_stringtie:
-    """
-    Filter for assembled transcripts that do not match reference transcripts (i.e. extract novel isoforms)
-    """
-    input:
-        os.path.join(STRINGTIE_SUBDIR, "{sample}.assembled.gtf")
-
-    output:
-        os.path.join(STRINGTIE_SUBDIR, "{sample}.no_ref_id.assembled.gtf")
-
-    params:
-        ref_string = config["stringtie_ref_string"]
-
-    log:
-        os.path.join(LOG_SUBDIR, "{sample}.extract_novel_stringtie.log")
-
-    shell:
-        """
-        grep -v '{params.ref_string}' {input} > {output} 2> {log}
-        """
+# rule extract_novel_stringtie:
+#     """
+#     Filter for assembled transcripts that do not match reference transcripts (i.e. extract novel isoforms)
+#     """
+#     input:
+#         os.path.join(STRINGTIE_SUBDIR, "{sample}.assembled.gtf")
+#
+#     output:
+#         os.path.join(STRINGTIE_SUBDIR, "{sample}.no_ref_id.assembled.gtf")
+#
+#     params:
+#         ref_string = config["stringtie_ref_string"]
+#
+#     log:
+#         os.path.join(LOG_SUBDIR, "{sample}.extract_novel_stringtie.log")
+#
+#     shell:
+#         """
+#         grep -v '{params.ref_string}' {input} > {output} 2> {log}
+#         """
 
 rule intron_chain_filter:
     """
     Filter novel transcripts for those with matching intron chains to reference transcripts up until their penultimate introns (i.e. novel last exons)
     """
     input:
-        os.path.join(STRINGTIE_SUBDIR, "{sample}.no_ref_id.assembled.gtf")
+        os.path.join(STRINGTIE_SUBDIR, "{sample}.assembled.gtf")
 
     output:
-        os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.no_ref_id.assembled.gtf")
+        os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.assembled.gtf")
 
     params:
         script = "scripts/filter_tx_by_intron_chain.py",
@@ -115,7 +115,7 @@ rule intron_chain_filter:
 
 rule compose_gtf_list_stringtie:
     input:
-        expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.no_ref_id.assembled.gtf"), sample = SAMPLES)
+        expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.assembled.gtf"), sample = SAMPLES)
     output:
         txt = os.path.join(STRINGTIE_SUBDIR,"gtf_list.txt")
     run:
