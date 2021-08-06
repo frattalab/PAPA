@@ -1,0 +1,9 @@
+1	.	transcript	11	340	.	+	.	gene_id "ref_gene_1"; transcript_id "ref_tr_1";
+1	.	exon	11	30	.	+	.	gene_id "ref_gene_1"; transcript_id "ref_tr_1"; exon_number "1.0";
+1	.	exon	101	120	.	+	.	gene_id "ref_gene_1"; transcript_id "ref_tr_1"; exon_number "2.0";
+1	.	exon	201	220	.	+	.	gene_id "ref_gene_1"; transcript_id "ref_tr_1"; exon_number "3.0";
+1	.	exon	301	340	.	+	.	gene_id "ref_gene_1"; transcript_id "ref_tr_1"; exon_number "4.0";
+2	.	transcript	11	120	.	-	.	gene_id "ref_gene_2"; transcript_id "ref_tr_2";
+2	.	exon	11	20	.	-	.	gene_id "ref_gene_2"; transcript_id "ref_tr_2"; exon_number "3.0";
+2	.	exon	81	90	.	-	.	gene_id "ref_gene_2"; transcript_id "ref_tr_2"; exon_number "2.0";
+2	.	exon	101	120	.	-	.	gene_id "ref_gene_2"; transcript_id "ref_tr_2"; exon_number "1.0";
