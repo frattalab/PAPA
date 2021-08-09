@@ -51,6 +51,11 @@
 1	.	exon	101	120	.	+	.	gene_id "nov_gene_1"; transcript_id "novel_tx_any_not_first_intron_plus"; exon_number "1.0"; gene_type "protein_coding";
 1	.	exon	201	220	.	+	.	gene_id "nov_gene_1"; transcript_id "novel_tx_any_not_first_intron_plus"; exon_number "2.0"; gene_type "protein_coding";
 1	.	exon	261	280	.	+	.	gene_id "nov_gene_1"; transcript_id "novel_tx_any_not_first_intron_plus"; exon_number "3.0"; gene_type "protein_coding";
+1	.	transcript	11	340	.	+	.	gene_id "novel_gene_1"; transcript_id "reass_ref_tr_1"; gene_type "protein_coding";
+1	.	exon	11	30	.	+	.	gene_id "novel_gene_1"; transcript_id "reass_ref_tr_1"; exon_number "1.0"; gene_type "protein_coding";
+1	.	exon	101	120	.	+	.	gene_id "novel_gene_1"; transcript_id "reass_ref_tr_1"; exon_number "2.0"; gene_type "protein_coding";
+1	.	exon	201	220	.	+	.	gene_id "novel_gene_1"; transcript_id "reass_ref_tr_1"; exon_number "3.0"; gene_type "protein_coding";
+1	.	exon	301	340	.	+	.	gene_id "novel_gene_1"; transcript_id "reass_ref_tr_1"; exon_number "4.0"; gene_type "protein_coding";
 2	.	transcript	41	120	.	-	.	gene_id "nov_gene_2"; transcript_id "nov_tx_le_dist_p_minus"; gene_type "protein_coding";
 2	.	exon	41	50	.	-	.	gene_id "nov_gene_2"; transcript_id "nov_tx_le_dist_p_minus"; exon_number "1.0"; gene_type "protein_coding";
 2	.	exon	81	90	.	-	.	gene_id "nov_gene_2"; transcript_id "nov_tx_le_dist_p_minus"; exon_number "2.0"; gene_type "protein_coding";
