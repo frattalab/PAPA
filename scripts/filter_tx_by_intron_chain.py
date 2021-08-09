@@ -108,6 +108,7 @@ def intron_id(gr):
                                                     ])
                                         )
 
+
 def sort_introns_by_strand(df):
     '''
     '''
@@ -120,7 +121,7 @@ def sort_introns_by_strand(df):
 
 
 
-def validate_matching_chain(df, max_terminal_non_match=2):
+def validate_matching_chain(df, max_terminal_non_match=1):
     '''
     apply to grouped df
     '''
@@ -141,6 +142,59 @@ def validate_matching_chain(df, max_terminal_non_match=2):
 
     else:
         return False
+
+
+def _agg_validate_matching_chain(df, max_terminal_non_match=1, colnames=["match_class", "n_terminal_non_match"]):
+    '''
+    Internal function on grouped dataframe containing all matches for each of its introns
+    Returns a summarised df of tx_id | match_class | n_terminal_non_match
+    tx_id - transcript_id for novel tx
+    match_class - str - 'valid' or 'not_valid' - does intron chain match until penultimate introns?
+    max_terminal_non_match - int - number of consecutive introns at 3'end without a reference match
+
+    Would be good to return the summarised rle
+    '''
+
+    runs, starts, vals = rle(df["match"])
+    # eprint("runs[-1] - {}".format(runs[-1]))
+
+    # Valid matches are:
+    # All introns match (e.g. bleedthrough event)
+    # All but last x introns match (usually one) (i.e. runs = 1,0)
+
+    # str_match_runs = [",".join()]
+
+    if np.all(vals):
+        # All introns match (e.g. bleedthrough event, 3'UTR extension (and any reassembled reference transcripts))
+        return pd.DataFrame({colnames[0]: ["valid"],
+                             colnames[1]: [0]
+                             }
+                            )
+
+    elif np.array_equal(vals, [1,0]):
+        # All but last x introns match
+        if runs[-1] <= max_terminal_non_match:
+            # n of 3'end non-matching introns is less than cut-off
+            return pd.DataFrame({colnames[0]: ["valid"],
+                                 colnames[1]: [runs[-1]]
+                                 }
+                                )
+
+        else:
+            # Too many unmatched at 3'end
+            return pd.DataFrame({colnames[0]: ["not_valid"],
+                                 colnames[1]: [runs[-1]]
+                                 }
+                                )
+
+    else:
+        # No exact match, no match starting at 5'end followed by only non-matched
+        return pd.DataFrame({colnames[0]: ["not_valid"],
+                             colnames[1]: [np.nan]
+                             }
+                            )
+
+
 
 def stie_groupby_last_exon(df, exon_n_col, which="last"):
     '''
@@ -201,7 +255,7 @@ def get_terminal_regions(gr,
 
     # Make sure region_number_col is int
     mod_gr = (gr.assign(region_number_col,
-                      lambda df: df[region_number_col].astype(int),
+                      lambda df: df[region_number_col].astype(float).astype(int),
                       nb_cpu = nb_cpu)
              )
 
@@ -248,6 +302,62 @@ def get_terminal_regions(gr,
     return out_gr
 
 
+def _join_grs(gr_left, gr_right, strandedness=None, how=None, report_overlap=False, slack=0, suffix="_b", nb_cpu=1):
+    '''
+    '''
+
+    return gr_left.join(gr_right, strandedness, how, report_overlap, slack, suffix, nb_cpu)
+
+
+def check_three_end(gr):
+    '''
+    '''
+    df = gr.as_df()
+
+    return all(df.Start == df.End)
+
+
+def _df_add_intron_number(df, out_col):
+    '''
+
+    '''
+
+    n_exons = len(df.index)
+
+    # Note: (I think) dictionary unpacking is required so out_col can be a variable...
+
+    if (df["Strand"] == "+").all():
+        # first in order by Start position in each txipt = left-most start position (i.e. most 5')
+        return df.assign(**{out_col: list(range(1, n_exons + 1))})
+
+    elif (df["Strand"] == "-").all():
+        # firs in order by Start position in each txipt = most 3' is left-most start position
+        return df.assign(**{out_col: list(range(1, n_exons +1))[::-1]})
+
+
+def add_intron_number(introns, id_col = "transcript_id", out_col="intron_number", nb_cpu=1):
+    '''
+    '''
+
+    start = timer()
+
+    assert len(set(introns.as_df().Feature.tolist())) == 1, "only one feature type (e.g. all introns, all exons) should be present in gr"
+
+    # Sort by position (could add an nb_cpu here...)
+    introns = introns.sort()
+
+    introns_out = (introns.apply(lambda df:
+                                 df.groupby(id_col)
+                                 .apply(lambda x: _df_add_intron_number(x, out_col)),
+                                 nb_cpu=nb_cpu
+                                 ))
+
+    end = timer()
+    eprint("took {} s".format(end - start))
+
+    return introns_out
+
+
 def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_introns, match_type = "transcript", max_terminal_non_match=2, nb_cpu = 1):
     '''
     '''
@@ -255,8 +365,8 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
     # Only keep essential columns (or those with potentially useful info) to save on memory
     # TO DO: this should really happen in main
 
-    novel_cols_to_keep = [col for col in ["Feature","transcript_id"] if col in novel_exons.columns.tolist()]
-    ref_cols_to_keep = [col for col in ["Feature", "transcript_id", "gene_id", "gene_name"] if col in ref_exons.columns.tolist()]
+    # novel_cols_to_keep = [col for col in ["Feature","transcript_id"] if col in novel_exons.columns.tolist()]
+    # ref_cols_to_keep = [col for col in ["Feature", "transcript_id", "gene_id", "gene_name"] if col in ref_exons.columns.tolist()]
 
     assert match_type in ["transcript", "any"], "match_type must be one of 'transcript' or 'any'. value passed - {}".format(str(match_type))
 
@@ -408,47 +518,47 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
 
 
     # 8. Filter down matching transcripts to those that all ref introns except penultimate or all introns...
-    eprint("filtering for valid intron chain matches...")
+    eprint("categorising intron chain matches as valid/invalid...")
     t13 = timer()
+
     if match_type == "any":
         # Only need to check by novel transcript_id
-        filt_novel_ref_match_info = (novel_ref_match_info.groupby("transcript_id_novel")
-                                     .filter(lambda x: validate_matching_chain(x, max_terminal_non_match)
-                                            )
+        # filt_novel_ref_match_info = (novel_ref_match_info.groupby("transcript_id_novel")
+        #                              .filter(lambda x: validate_matching_chain(x, max_terminal_non_match)
+        #                                     )
+        #                             )
+
+        novel_ref_match_info_agg = (novel_ref_match_info.groupby("transcript_id_novel")
+                                    .apply(lambda df: _agg_validate_matching_chain(df,
+                                                                                   max_terminal_non_match)
+                                           )
+                                    .reset_index("transcript_id_novel") # return to a column
+                                    .reset_index(drop=True) # drops weird 0 0 0 index made by my function... (To do: work out why)
                                     )
 
-    elif match_type == "transcript":
-        # Check novel tx vs each ref tx
-        filt_novel_ref_match_info = (novel_ref_match_info.groupby(["transcript_id_novel","transcript_id_ref"])
-                                     .filter(lambda x: validate_matching_chain(x, max_terminal_non_match)
-                                            )
-                                    )
+    # elif match_type == "transcript":
+    #     # Check novel tx vs each ref tx
+    #     filt_novel_ref_match_info = (novel_ref_match_info.groupby(["transcript_id_novel","transcript_id_ref"])
+    #                                  .filter(lambda x: validate_matching_chain(x, max_terminal_non_match)
+    #                                         )
+    #                                 )
+
     t14 = timer()
     eprint("took {} s".format(t14 - t13))
 
 
-    # Return simplified df of novel transcript_id & matching transcript_id if applicable
-
-    if match_type == "any":
-        return filt_novel_ref_match_info["transcript_id_novel"].drop_duplicates()
-
-    elif match_type == "transcript":
-        return filt_novel_ref_match_info[["transcript_id_novel", "transcript_id_ref"]].drop_duplicates()
+    return novel_ref_match_info_agg
 
 
-def _join_grs(gr_left, gr_right, strandedness=None, how=None, report_overlap=False, slack=0, suffix="_b", nb_cpu=1):
-    '''
-    '''
+    # # Return simplified df of novel transcript_id & matching transcript_id if applicable
+    # if match_type == "any":
+    #     return filt_novel_ref_match_info["transcript_id_novel"].drop_duplicates()
+    #
+    # elif match_type == "transcript":
+    #     return filt_novel_ref_match_info[["transcript_id_novel", "transcript_id_ref"]].drop_duplicates()
 
-    return gr_left.join(gr_right, strandedness, how, report_overlap, slack, suffix, nb_cpu)
 
 
-def check_three_end(gr):
-    '''
-    '''
-    df = gr.as_df()
-
-    return all(df.Start == df.End)
 
 
 def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info, nb_cpu=1):
@@ -458,6 +568,9 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     These transcript types cannot have valid intron chain match but can still produce valid last exon isoforms
     A well known e.g. of this isoform type is TDP-43 depletion sensitive STMN2 isoform
     '''
+
+    assert isinstance(chain_match_info, pd.DataFrame)
+
     # start = timer()
     eprint("finding novel last exon isoforms contained within annotated first introns...")
 
@@ -465,13 +578,13 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     eprint("extracting non-chain matched novel isoforms...")
     s1 = timer()
 
-    if isinstance(chain_match_info, pd.Series):
-        # match type was any
-        novel_exons_nm = novel_exons.subset(lambda df: ~df["transcript_id"].isin(set(chain_match_info.tolist())), nb_cpu=nb_cpu)
+    mask = chain_match_info["match_class"] == "valid"
+    # matched_chain_match_info = chain_match_info[mask]
+    nm_chain_match_info = chain_match_info[~mask]
 
-    elif isinstance(chain_match_info, pd.DataFrame):
-        # match_by/match_type was transcript
-        novel_exons_nm = novel_exons.subset(lambda df: ~df["transcript_id"].isin(set(chain_match_info["transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
+    # eprint(nm_chain_match_info)
+
+    novel_exons_nm = novel_exons.subset(lambda df: df["transcript_id"].isin(set(nm_chain_match_info["transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
 
     e1 = timer()
     eprint("took {} s".format(e1 - s1))
@@ -521,10 +634,21 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     eprint("took {} s".format(e4 - s4))
 
 
-    tr_ids = set(novel_nm_fi.transcript_id.tolist())
-    n_tr = len(tr_ids)
-    eprint("number of novel tx with first intron contained annotated first introns - {}".format(n_tr))
+    try:
+        # eprint(novel_nm_fi.columns)
+        tr_ids = set(novel_nm_fi.transcript_id.tolist())
+        n_tr = len(tr_ids)
 
+    except AssertionError:
+        tr_ids = set()
+        n_tr = 0
+
+
+    if n_tr == 0:
+        eprint("0 non-matched novel transcripts with last exons contained withing annotated exons - returning initial chain matching info df")
+        return chain_match_info
+
+    eprint("number of novel tx with first intron contained annotated first introns - {}".format(n_tr))
 
     #2.5 - Get 3'ends of first exons of transcripts with first-intron contained last exons
     eprint("finding 3'ends of first exons of novel txipts with last exons fully contained within annotated introns...")
@@ -617,59 +741,32 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
         return chain_match_info
 
     else:
+        # Reformat first_intron_contained_match to match chain_match_info and update first intron matched transcripts to valid
+        first_intron_contained_match = (first_intron_contained_match.as_df()
+                                        [["transcript_id","transcript_id_ref"]]
+                                        .rename({"transcript_id": "transcript_id_novel"}, axis=1)
+                                        .assign(**{"match_class": "valid", "n_terminal_non_match": np.nan}))
 
-        first_intron_contained_match = first_intron_contained_match.as_df()[["transcript_id","transcript_id_ref"]].rename({"transcript_id": "transcript_id_novel"}, axis=1)
-
-        if isinstance(chain_match_info, pd.Series):
-            return pd.concat([pd.DataFrame(chain_match_info), first_intron_contained_match]).reset_index(drop=True)
-
-        elif isinstance(chain_match_info, pd.DataFrame):
-            return pd.concat([chain_match_info, first_intron_contained_match]).reset_index(drop=True)
-
-
-def _df_add_intron_number(df, out_col):
-    '''
-
-    '''
-
-    n_exons = len(df.index)
-
-    # Note: (I think) dictionary unpacking is required so out_col can be a variable...
-
-    if (df["Strand"] == "+").all():
-        # first in order by Start position in each txipt = left-most start position (i.e. most 5')
-        return df.assign(**{out_col: list(range(1, n_exons + 1))})
-
-    elif (df["Strand"] == "-").all():
-        # firs in order by Start position in each txipt = most 3' is left-most start position
-        return df.assign(**{out_col: list(range(1, n_exons +1))[::-1]})
+        fi_ids = set(first_intron_contained_match["transcript_id_novel"].tolist())
 
 
-def add_intron_number(introns, id_col = "transcript_id", out_col="intron_number", nb_cpu=1):
-    '''
-    '''
+        # if isinstance(chain_match_info, pd.Series):
+        #     return pd.concat([pd.DataFrame(chain_match_info), first_intron_contained_match]).reset_index(drop=True)
+        # elif isinstance(chain_match_info, pd.DataFrame):
 
-    start = timer()
-
-    assert len(set(introns.as_df().Feature.tolist())) == 1, "only one feature type (e.g. all introns, all exons) should be present in gr"
-
-    # Sort by position (could add an nb_cpu here...)
-    introns = introns.sort()
-
-    introns_out = (introns.apply(lambda df:
-                                 df.groupby(id_col)
-                                 .apply(lambda x: _df_add_intron_number(x, out_col)),
-                                 nb_cpu=nb_cpu
-                                 ))
+        # Update chain_match_info with previous first intron transcripts now classified as valid matches
+        return (pd.concat([chain_match_info[~chain_match_info["transcript_id_novel"].isin(fi_ids)],
+                          first_intron_contained_match
+                           ]
+                          )
+                .reset_index(drop=True)
+                )
 
 
-    end = timer()
-    eprint("took {} s".format(end - start))
-
-    return introns_out
 
 
-def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu):
+
+def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nb_cpu):
     '''
     '''
     start = timer()
@@ -779,6 +876,10 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
 
     eprint("took {} s".format(end6 - start6))
 
+    # eprint("this is df with match info for each novel transcript...")
+    # eprint(valid_matches)
+    # eprint(valid_matches.dtypes)
+
     eprint("finding novel last exons completely contained within annotated first introns...")
     s7 = timer()
 
@@ -798,10 +899,10 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
 
     elif isinstance(fi_valid_matches, pd.DataFrame):
         # match_by/match_type was transcript
-        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(fi_valid_matches["transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
+        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(fi_valid_matches.loc[fi_valid_matches["match_class"] == "valid", "transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
         valid_novel.to_gtf(out_prefix + ".gtf")
 
-        valid_matches.to_csv(out_prefix + ".match_stats.tsv", sep="\t", header=True)
+        fi_valid_matches.to_csv(out_prefix + ".match_stats.tsv", sep="\t", header=True, index=False)
 
 
     end = timer()
