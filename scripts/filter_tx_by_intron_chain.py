@@ -794,12 +794,14 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_gtf, nb_cpu
     if isinstance(fi_valid_matches, pd.Series):
         # match type was any
         valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(fi_valid_matches.tolist())), nb_cpu=nb_cpu)
-        valid_novel.to_gtf(out_gtf)
+        valid_novel.to_gtf(out_prefix + ".gtf")
 
     elif isinstance(fi_valid_matches, pd.DataFrame):
         # match_by/match_type was transcript
         valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(fi_valid_matches["transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
-        valid_novel.to_gtf(out_gtf)
+        valid_novel.to_gtf(out_prefix + ".gtf")
+
+        valid_matches.to_csv(out_prefix + ".match_stats.tsv", sep="\t", header=True)
 
 
     end = timer()
@@ -819,10 +821,10 @@ if __name__ == '__main__':
 
     parser.add_argument("-i", "--input-transcripts", default='', dest="novel_gtf", help = "path to GTF file containing novel transcripts assembled by StringTie.", required=True)
     parser.add_argument("-r", "--reference-transcripts", default='', type=str, dest="ref_gtf", help="path to GTF file containing reference transcripts against which to match intron chains of novel transcripts. Should contain same chromosome naming scheme", required=True)
-    parser.add_argument("-m", "--match-by", default="any", type=str, choices=["any", "transcript"], dest="match_by", help="Consider novel transcript a valid match if all but penultimate intron(s) match introns of any transcript ('any') or the same transcript ('transcript') (default: %(default)s)")
+    parser.add_argument("-m", "--match-by", default="any", type=str, choices=["any", "transcript"], dest="match_by", help="Consider novel transcript a valid match if all but penultimate intron(s) match introns of any transcript ('any') or the same transcript ('transcript'). 'transcript' is CURRENTLY UNIMPLEMENTED (default: %(default)s)")
     parser.add_argument("-n", "--max-terminal-non-match", default=1, type=int, dest="max_terminal_non_match", help="Maximum number of uninterrupted reference-unmatched introns at 3'end of novel transcript for it to be considered a valid match (default: %(default)s)")
     parser.add_argument("-c", "--cores", default=1, type=int, help="number of cpus/threads for parallel processing (default: %(default)s)")
-    parser.add_argument("-o", "--output-gtf", type=str, default="intron_chain_matched_transcripts.gtf", dest="output_gtf", help="name of output GTF file containing novel transcripts with intron chain matches (default: %(default)s)")
+    parser.add_argument("-o", "--output-prefix", type=str, default="intron_chain_matched_transcripts", dest="output_prefix", help="Prefix for output files (GTF with valid matches, matching stats TSV etc.). '.<suffix>' added depending on output file type (default: %(default)s)")
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -832,4 +834,4 @@ if __name__ == '__main__':
 
 
 
-    main(args.novel_gtf, args.ref_gtf, args.match_by, args.max_terminal_non_match, args.output_gtf, args.cores)
+    main(args.novel_gtf, args.ref_gtf, args.match_by, args.max_terminal_non_match, args.output_prefix, args.cores)
