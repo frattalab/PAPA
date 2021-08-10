@@ -561,7 +561,7 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
 
 
 
-def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info, nb_cpu=1):
+def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info, novel_source, nb_cpu=1):
     '''
     Function to return novel last exon transcripts occurring within annotated first exons,
     In which the 3'end boundary of the novel first exon exactly matches an annotated first exon
@@ -596,7 +596,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
 
     novel_nm_last_exons = get_terminal_regions(novel_exons_nm,
                                                region_number_col="exon_number",
-                                               source="stringtie",
+                                               source=novel_source,
                                                filter_single=True,
                                                which_region="last",
                                                nb_cpu=nb_cpu)
@@ -658,7 +658,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
                                                                     nb_cpu=nb_cpu
                                                                     ),
                                               which_region="first",
-                                              source="stringtie",
+                                              source=novel_source,
                                               nb_cpu=nb_cpu
                                               )
                          .three_end()
@@ -764,9 +764,238 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
 
 
 
+def find_extensions(gr, ref_gr, id_col = "transcript_id", nb_cpu=1):
+    '''
+    return set of IDs from gr that have an extension relative to regions in ref_gr
+    '''
+
+    assert len(gr) > 0
+
+    #1. Get regions in gr overlapping with regions in ref_gr
+    joined_gr = gr.join(ref_gr,
+                        strandedness="same",
+                        how=None, # only keep overlapping intervals
+                        nb_cpu=nb_cpu
+                       )
 
 
-def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nb_cpu):
+    #2. Filter for rows where 3'end of region is further downstream of overlapping ref exon
+    ext_ids = (set(joined_gr.subset(lambda df: (((df["Strand"] == "+") & (df["End"] > df["End_b"])) |
+                                                ((df["Strand"] == "-") & (df["Start"] < df["Start_b"]))
+                                                ),
+                               nb_cpu=nb_cpu
+                               )
+                       .as_df()
+                       [id_col].tolist()
+                   )
+               )
+
+    return ext_ids
+
+    # out_gr = (joined_gr.apply(lambda df: ((df.loc[df["Start"] > df["Start_b"],])
+    #                                       if (df["Strand"] == "+").all()
+    #                                       else (df.loc[df["End"] < df["End_b"],])
+    #                                      ),
+    #                           nb_cpu = nb_cpu
+    #                          )
+    #          )
+
+
+def get_internal_exons(gr,
+                       feature_col="Feature",
+                       feature_key="exon",
+                       id_col="transcript_id",
+                       region_number_col="exon_number",
+                       nb_cpu=1):
+    '''
+    Return gr of internal exons for each transcript_id
+    In process, exon_number_col will be converted to type 'int'
+    '''
+
+    assert gr.as_df()[feature_col].drop_duplicates().tolist() == [feature_key], "only {} entries should be present in gr".format(feature_key)
+
+
+    # Pull out exons, convert exon_number to int
+    exons_gr = gr.assign(region_number_col,
+                         lambda df: df[region_number_col].astype(float).astype("Int64"),
+                         nb_cpu = nb_cpu)
+
+    # Filter out last exons for each transcript (max exon_number)
+    # & first exons for each transcript (exon_number == 1)
+    out_gr = (exons_gr.apply(lambda df:
+                             df.loc[~((df.groupby(id_col)[region_number_col].idxmax()) |
+                                       (df[region_number_col] != 1)
+                                       ),
+                                     ],
+                             nb_cpu=nb_cpu)
+              )
+
+    return out_gr
+
+
+def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info, novel_source, nb_cpu=1):
+    '''
+    Filter transcripts with complete intron chain matches for bleedthrough intronic last exons and 3'UTR extensions
+    Reassembled reference transcripts will have a complete intron chain match to ref but not be meaningful novel isoforms
+    This wrapper script will filter chain_match_info to remove reassembled ref transcripts
+    And assign a 'isoform_class' column as well - 'exon_bleedthrough', 'utr_extension'
+    '''
+
+    #1. Extract complete match isoforms from chain_match_info
+    exact_ids = set(chain_match_info.loc[chain_match_info["n_terminal_non_match"].astype(float).astype("Int64") == 0, "transcript_id_novel"].tolist())
+
+    eprint("ids with complete intron chain match - {}".format(",".join(exact_ids)))
+
+    #2. Identify 'bleedthrough' intronic events, where:
+    #### - 3'end lies within an annotated intron
+    #### - Novel last exon overlaps with ref internal exon
+    #### - 3'end of  novel last exon is downstream of overlapping ref internal intron
+
+    # A - check three end  of last is within annotated intron.
+    m_l_novel_exons = get_terminal_regions(novel_exons.subset(lambda df: df["transcript_id"].isin(exact_ids), nb_cpu=nb_cpu),
+                                           region_number_col="exon_number",
+                                           source=novel_source,
+                                           filter_single=True,
+                                           which_region="last",
+                                           nb_cpu=nb_cpu
+                                           )
+
+    m_l_novel_exons_3p = m_l_novel_exons.three_end()
+
+    if check_three_end(m_l_novel_exons_3p):
+        m_l_novel_exons_3p = m_l_novel_exons_3p.assign("End", lambda df: df.End + 1)
+
+    # eprint("\n3'ENDS OF NOVEL EXONS WITH EXACT CHAIN MATCHES")
+    # eprint(m_l_novel_exons_3p)
+
+
+    # eprint("\nTHIS IS REF INTRONS")
+    # eprint(ref_introns)
+
+    intron_cont_3p_ids = (set(m_l_novel_exons_3p.overlap(ref_introns,
+                                                         strandedness="same",
+                                                         how="containment")
+                                                .as_df()
+                                                ["transcript_id"].tolist()
+                              )
+                          )
+
+    # eprint("\nTHIS IS IDS OF 3'ENDS COMPLETELY CONTAINED WITHIN ANNOTATED INTRONS")
+    # eprint(intron_cont_3p_ids)
+
+    m_l_novel_exons_bl = m_l_novel_exons.subset(lambda df: df["transcript_id"].isin(intron_cont_3p_ids), nb_cpu=nb_cpu)
+
+    # B - Get reference internal exons
+    eprint("finding reference internal exons...")
+    s2 = timer()
+
+    ref_exons_int = get_internal_exons(ref_exons, nb_cpu=nb_cpu)
+
+    e2 = timer()
+    eprint("took {} s".format(e2 - s2))
+
+    # C - find last exons with 3'end downstream of annotated internal exon 3'end
+    eprint("finding tx ids of novel isoforms with bleedthrough last exons...")
+
+    bleedthrough_ids = find_extensions(m_l_novel_exons_bl, ref_exons_int, nb_cpu=nb_cpu)
+
+    ##
+    exact_ids_n_bl = exact_ids.difference(bleedthrough_ids)
+
+    # eprint("Ids remaining after finding bleedthrough - {}".format(",".join(exact_ids_n_bl)))
+
+    ## Check for 3'UTR extensions
+
+    # - novel last exons
+    # - ref last exons
+    # - 3p end of novel last doesn't overlap with annotated first exon
+    m_l_novel_exons_n_bl = m_l_novel_exons.subset(lambda df: df["transcript_id"].isin(exact_ids_n_bl), nb_cpu=nb_cpu)
+
+    m_l_novel_exons_n_bl_3p = m_l_novel_exons_n_bl.three_end()
+    eprint(m_l_novel_exons_n_bl_3p)
+
+    if check_three_end(m_l_novel_exons_n_bl_3p):
+        m_l_novel_exons_n_bl_3p = m_l_novel_exons_n_bl_3p.assign("End", lambda df: df.End + 1)
+
+    # Get reference first exons
+    ref_exons_f = get_terminal_regions(ref_exons,
+                                       region_number_col="exon_number",
+                                       source=None,
+                                       filter_single=True,
+                                       which_region="first",
+                                       nb_cpu=nb_cpu
+                                       )
+
+    ref_exons_l = get_terminal_regions(ref_exons,
+                                       region_number_col="exon_number",
+                                       source=None,
+                                       filter_single=True,
+                                       which_region="last",
+                                       nb_cpu=nb_cpu
+                                       )
+
+
+    not_fe_3p_ids = (set(m_l_novel_exons_n_bl_3p.overlap(ref_exons_f,
+                                                         strandedness="same",
+                                                         how="containment",
+                                                         invert=True)
+                                                         .as_df()
+                                                         ["transcript_id"].tolist()
+                         )
+                     )
+
+    m_l_novel_exons_n_bl = m_l_novel_exons_n_bl.subset(lambda df: df["transcript_id"].isin(not_fe_3p_ids), nb_cpu=nb_cpu)
+
+    utr_extension_ids = find_extensions(m_l_novel_exons_n_bl, ref_exons_l, nb_cpu=nb_cpu)
+
+    # both_classes = bleedthrough_ids.union(utr_extension_ids)
+
+    def _temp_assign(df, bld_ids, ext_ids):
+
+        try:
+            int(df["n_terminal_non_match"])
+
+        except ValueError:
+            return np.nan
+
+        if int(df["n_terminal_non_match"]) == 0:
+
+            if df["transcript_id_novel"] in bld_ids:
+                return "bleedthrough"
+
+            if df["transcript_id_novel"] in ext_ids:
+                return "utr_extension"
+
+            else:
+                return "reassembled_reference"
+
+        else:
+            return np.nan
+
+
+    # Update chain_match_info with isoform_class column
+    # conditions = [chain_match_info["n_terminal_non_match"].astype(float).astype("Int64").eq(0, fill_value=999) & chain_match_info["transcript_id_novel"].isin(bleedthrough_ids),
+    #               chain_match_info["n_terminal_non_match"].astype(float).astype("Int64").eq(0, fill_value=999) & chain_match_info["transcript_id_novel"].isin(utr_extension_ids),
+    #               chain_match_info["n_terminal_non_match"].astype(float).astype("Int64").eq(0, fill_value=999) & ~chain_match_info["transcript_id_novel"].isin(both_classes),
+    #               ]
+    #
+    # choices = ["bleedthrough", "utr_extension", "reassembled_reference"]
+    #
+    # eprint("{}".format(chain_match_info["n_terminal_non_match"].astype(float).astype("Int64").eq(0, fill_value=9999) & chain_match_info["transcript_id_novel"].isin(bleedthrough_ids)))
+    # chain_match_info["isoform_class"] = np.select(conditions, choices, default=np.nan)
+    # n_loc = chain_match_info.columns.get_loc("n_terminal_non_match")
+    # id_loc = chain_match_info.columns.get_loc("transcript_id_novel")
+
+    chain_match_info["isoform_class"] = chain_match_info.apply(lambda df: _temp_assign(df, bleedthrough_ids, utr_extension_ids), axis="columns")
+
+    #) chain_match_info.assign(isoform_class=lambda df: pd.Series([_temp_assign(row, bleedthrough_ids, utr_extension_ids, n_loc, id_loc)
+    #                                                                               for row in df.itertuples(index = False)]))
+
+    return chain_match_info
+
+
+
+def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, novel_source, nb_cpu):
     '''
     '''
     start = timer()
@@ -887,22 +1116,37 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nb_
                                               ref_pc_exons,
                                               ref_pc_introns,
                                               valid_matches,
+                                              novel_source,
                                               nb_cpu)
 
     e7 = timer()
     eprint("finding first intron novel isoforms - took {} s".format(e7 - s7))
 
+    eprint("finding bleedthrough and 3'UTR extension events from transcripts with exact intron chain matches...")
+    s8 = timer()
+
+    bl_utr_valid_matches = filter_complete_match(novel_exons,
+                                                 ref_pc_exons,
+                                                 ref_pc_introns,
+                                                 fi_valid_matches,
+                                                 novel_source,
+                                                 nb_cpu)
+
+    e8 = timer()
+    eprint("finding bleedthrough and 3'UTR extension events - took {} s".format(e8 - s8))
+
+
     if isinstance(fi_valid_matches, pd.Series):
         # match type was any
-        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(fi_valid_matches.tolist())), nb_cpu=nb_cpu)
+        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(bl_utr_valid_matches.tolist())), nb_cpu=nb_cpu)
         valid_novel.to_gtf(out_prefix + ".gtf")
 
     elif isinstance(fi_valid_matches, pd.DataFrame):
         # match_by/match_type was transcript
-        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(fi_valid_matches.loc[fi_valid_matches["match_class"] == "valid", "transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
+        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(bl_utr_valid_matches.loc[bl_utr_valid_matches["match_class"] == "valid", "transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
         valid_novel.to_gtf(out_prefix + ".gtf")
 
-        fi_valid_matches.to_csv(out_prefix + ".match_stats.tsv", sep="\t", header=True, index=False)
+        bl_utr_valid_matches.to_csv(out_prefix + ".match_stats.tsv", sep="\t", header=True, index=False)
 
 
     end = timer()
@@ -926,6 +1170,7 @@ if __name__ == '__main__':
     parser.add_argument("-n", "--max-terminal-non-match", default=1, type=int, dest="max_terminal_non_match", help="Maximum number of uninterrupted reference-unmatched introns at 3'end of novel transcript for it to be considered a valid match (default: %(default)s)")
     parser.add_argument("-c", "--cores", default=1, type=int, help="number of cpus/threads for parallel processing (default: %(default)s)")
     parser.add_argument("-o", "--output-prefix", type=str, default="intron_chain_matched_transcripts", dest="output_prefix", help="Prefix for output files (GTF with valid matches, matching stats TSV etc.). '.<suffix>' added depending on output file type (default: %(default)s)")
+    parser.add_argument("--input-exon-number-format", default="stringtie", choices=["stringtie","strand_aware"], dest="novel_exon_n_fmt", help="Are 'exon numbers' in input transcripts assigned 1..n leftmost-rightmost ignoring strand (StringTie's convention, 'stringtie') or strand aware (Gencode annotation convention, 'strand_aware') (default: %(default)s)")
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -933,6 +1178,9 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
+    if args.novel_exon_n_fmt == "strand_aware":
+        exon_n_type = None
+    else:
+        exon_n_type = args.novel_exon_n_fmt
 
-
-    main(args.novel_gtf, args.ref_gtf, args.match_by, args.max_terminal_non_match, args.output_prefix, args.cores)
+    main(args.novel_gtf, args.ref_gtf, args.match_by, args.max_terminal_non_match, args.output_prefix, exon_n_type, args.cores)
