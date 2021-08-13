@@ -484,7 +484,8 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
 
         # Check that first intron of each novel transcript matches first intron of a reference transcript
         # Replace 'match' with 0 if novel first intron doesn't match ref first intron
-        eprint("novel_ref_match_info colnames - {}".format(novel_ref_match_info.columns))
+        # eprint("novel_ref_match_info colnames - {}".format(novel_ref_match_info.columns))
+
         novel_ref_match_info["match"] = np.where((novel_ref_match_info["intron_number"] == 1) &
                                                  (novel_ref_match_info["intron_number_ref"] != 1),
                                                  0,
@@ -497,7 +498,7 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
                                          )
 
         # Now when drop duplicates a match is prioritised over no matches
-        novel_ref_match_info = (novel_ref_match_info.sort_values("match")
+        novel_ref_match_info = (novel_ref_match_info.sort_values(["transcript_id_novel","intron_number", "match"])
                                                     .drop_duplicates(subset=["intron_id","match"],
                                                                      keep="first")
                                 )
@@ -933,7 +934,7 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
     m_l_novel_exons_n_bl = m_l_novel_exons.subset(lambda df: df["transcript_id"].isin(exact_ids_n_bl), nb_cpu=nb_cpu)
 
     m_l_novel_exons_n_bl_3p = m_l_novel_exons_n_bl.three_end()
-    eprint(m_l_novel_exons_n_bl_3p)
+    # eprint(m_l_novel_exons_n_bl_3p)
 
     if check_three_end(m_l_novel_exons_n_bl_3p):
         m_l_novel_exons_n_bl_3p = m_l_novel_exons_n_bl_3p.assign("End", lambda df: df.End + 1)
