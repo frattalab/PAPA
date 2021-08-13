@@ -767,7 +767,11 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
         first_intron_contained_match = (first_intron_contained_match.as_df()
                                         [["transcript_id","transcript_id_ref"]]
                                         .rename({"transcript_id": "transcript_id_novel"}, axis=1)
-                                        .assign(**{"match_class": "valid", "n_terminal_non_match": np.nan}))
+                                        .assign(**{"match_class": "valid",
+                                                   "n_terminal_non_match": np.nan,
+                                                   "isoform_class": "first_intron_spliced"
+                                                   }
+                                                ))
 
         fi_ids = set(first_intron_contained_match["transcript_id_novel"].tolist())
 
@@ -777,6 +781,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
         # elif isinstance(chain_match_info, pd.DataFrame):
 
         # Update chain_match_info with previous first intron transcripts now classified as valid matches
+
         return (pd.concat([chain_match_info[~chain_match_info["transcript_id_novel"].isin(fi_ids)],
                           first_intron_contained_match
                            ]
@@ -1009,6 +1014,7 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
     # id_loc = chain_match_info.columns.get_loc("transcript_id_novel")
 
     chain_match_info["isoform_class"] = chain_match_info.apply(lambda df: _temp_assign(df, bleedthrough_ids, utr_extension_ids), axis="columns")
+    chain_match_info["match_class"] = np.where(chain_match_info["isoform_class"] == "reassembled_reference", "not_valid", "valid")
 
     #) chain_match_info.assign(isoform_class=lambda df: pd.Series([_temp_assign(row, bleedthrough_ids, utr_extension_ids, n_loc, id_loc)
     #                                                                               for row in df.itertuples(index = False)]))
