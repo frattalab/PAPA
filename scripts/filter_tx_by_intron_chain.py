@@ -414,13 +414,16 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
 
     t5 = timer()
 
-    novel_intron_ids_ordered = (novel_introns.as_df()
-                                .groupby("transcript_id")
-                                .apply(sort_introns_by_strand)
-                                .reset_index(drop=True)
-                                .rename({"index": "intron_number"}, axis="columns")
-                               )
-    novel_intron_ids_ordered["intron_number"] = novel_intron_ids_ordered["intron_number"].add(1)
+
+    novel_intron_ids_ordered = novel_introns.as_df().sort_values(by=["transcript_id", "intron_number"], ascending=True)
+    # novel_intron_ids_ordered = (novel_introns.as_df()
+    #                             .groupby("transcript_id")
+    #                             .sort_values(by=["transcript_id","intron_number"],ascending=True)
+    #                             # .apply(sort_introns_by_strand)
+    #                             .reset_index(drop=True)
+    #                             # .rename({"index": "intron_number"}, axis="columns")
+    #                             )
+    # novel_intron_ids_ordered["intron_number"] = novel_intron_ids_ordered["intron_number"].add(1)
 
     # df of txipt_id | intron_id | intron_number
     novel_intron_ids_ordered = novel_intron_ids_ordered.loc[:,["transcript_id","intron_id","intron_number"]]
@@ -455,7 +458,7 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
     eprint("took {} s".format(t10 - t9))
 
     # Minimal info needed on matches between novel and reference introns
-    joined = joined.as_df()[["transcript_id","intron_id","transcript_id_ref","intron_id_ref"]]
+    joined = joined.as_df()[["transcript_id","intron_id","transcript_id_ref","intron_id_ref","intron_number_ref"]]
 
 #     eprint(joined.dtypes)
 
@@ -479,7 +482,25 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
         novel_ref_match_info["match"] = novel_ref_match_info["match"].fillna(0)
         novel_ref_match_info["match"] = novel_ref_match_info["match"].replace("\w*", 1, regex=True)
 
-        novel_ref_match_info = novel_ref_match_info.drop_duplicates(subset=["intron_id"])
+        # Check that first intron of each novel transcript matches first intron of a reference transcript
+        # Replace 'match' with 0 if novel first intron doesn't match ref first intron
+        eprint("novel_ref_match_info colnames - {}".format(novel_ref_match_info.columns))
+        novel_ref_match_info["match"] = np.where((novel_ref_match_info["intron_number"] == 1) &
+                                                 (novel_ref_match_info["intron_number_ref"] != 1),
+                                                 0,
+                                                 novel_ref_match_info["match"])
+
+        # Make an ordered categorical column describing whether match is to first or other intron
+        novel_ref_match_info["match"] = (novel_ref_match_info["match"].astype("category")
+                                                                      .cat
+                                                                      .set_categories([1,0], ordered=True)
+                                         )
+
+        # Now when drop duplicates a match is prioritised over no matches
+        novel_ref_match_info = (novel_ref_match_info.sort_values("match")
+                                                    .drop_duplicates(subset=["intron_id","match"],
+                                                                     keep="first")
+                                )
 
         # Minimal informative info is novel tx, novel intron_id & number, match column
         novel_ref_match_info = novel_ref_match_info[["transcript_id_novel","intron_id","intron_number","match"]]
