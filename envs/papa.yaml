@@ -14,6 +14,8 @@ dependencies:
   - backports=1.0
   - backports.functools_lru_cache=1.6.4
   - bleach=3.3.0
+  - boost-cpp=1.74.0
+  - bzip2=1.0.8
   - ca-certificates=2021.5.30
   - certifi=2021.5.30
   - cffi=1.14.5
@@ -27,6 +29,8 @@ dependencies:
   - fontconfig=2.13.1
   - freetype=2.10.4
   - gettext=0.21.0
+  - gffcompare=0.11.2
+  - gffread=0.12.1
   - glib=2.68.3
   - glib-tools=2.68.3
   - gst-plugins-base=1.18.4
@@ -40,6 +44,7 @@ dependencies:
   - ipywidgets=7.6.3
   - jbig=2.1
   - jedi=0.18.0
+  - jemalloc=5.2.1
   - jinja2=3.0.1
   - jpeg=9d
   - jsonschema=3.2.0
@@ -111,7 +116,7 @@ dependencies:
   - openssl=1.1.1k
   - packaging=20.9
   - palettable=3.3.0
-  - pandas=1.2.5
+  - pandas=1.3.1
   - pandoc=2.14.0.3
   - pandocfilters=1.4.3
   - parso=0.8.2
@@ -146,6 +151,7 @@ dependencies:
   - qtconsole=5.1.0
   - qtpy=1.9.0
   - readline=8.1
+  - salmon=1.5.2
   - scipy=1.6.3
   - send2trash=1.7.1
   - setuptools=52.0.0
@@ -155,6 +161,7 @@ dependencies:
   - statsmodels=0.12.2
   - stringtie=2.1.7
   - tabulate=0.8.9
+  - tbb=2020.3
   - terminado=0.10.1
   - testpath=0.5.0
   - tk=8.6.10
@@ -200,10 +207,11 @@ dependencies:
     - pyasn1-modules==0.2.8
     - pydantic==1.8.2
     - pyyaml==5.4.1
-    - ray==1.5.0
+    - ray==1.5.2
     - redis==3.5.3
     - requests==2.26.0
     - rsa==4.7.2
     - typing-extensions==3.10.0.0
     - urllib3==1.26.6
     - yarl==1.6.3
+prefix: /home/sam/miniconda3/envs/papa_pipeline
