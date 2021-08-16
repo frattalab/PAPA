@@ -1370,6 +1370,11 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
         valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(ui3_bl_utr_valid_matches.loc[ui3_bl_utr_valid_matches["match_class"] == "valid", "transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
         valid_novel.to_gtf(out_prefix + ".gtf")
 
+        summary_counts = ui3_bl_utr_valid_matches.loc[lambda x: x["match_class"] == "valid","isoform_class"].value_counts(dropna=False)
+        # eprint(summary_counts)
+
+        pd.DataFrame(summary_counts).reset_index().to_csv(out_prefix + ".valid.class_summary_counts.tsv", sep="\t", header=["isoform_class","count"], index=False, na_rep="NA")
+
         ui3_bl_utr_valid_matches.to_csv(out_prefix + ".match_stats.tsv", sep="\t", header=True, index=False,na_rep="NA")
 
 
