@@ -583,7 +583,13 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
 
 
 
-def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info, novel_source, nb_cpu=1):
+def filter_first_intron_tx(novel_first_exons,
+                           novel_last_exons,
+                           ref_first_exons,
+                           ref_first_introns,
+                           chain_match_info,
+                           novel_source,
+                           nb_cpu=1):
     '''
     Function to return novel last exon transcripts occurring within annotated first exons,
     In which the 3'end boundary of the novel first exon exactly matches an annotated first exon
@@ -606,7 +612,6 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
 
     # eprint(nm_chain_match_info)
 
-    novel_exons_nm = novel_exons.subset(lambda df: df["transcript_id"].isin(set(nm_chain_match_info["transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
 
     e1 = timer()
     eprint("took {} s".format(e1 - s1))
@@ -614,40 +619,44 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
 
     #2 -Extract last exons of non-chain matched novel isoforms
     eprint("extracting last exons of non-chain matched novel isoforms")
+
     s2 = timer()
-
-    novel_nm_last_exons = get_terminal_regions(novel_exons_nm,
-                                               region_number_col="exon_number",
-                                               source=novel_source,
-                                               filter_single=True,
-                                               which_region="last",
-                                               nb_cpu=nb_cpu)
-
+    novel_last_exons_nm = (novel_last_exons.subset(lambda df:
+                                                   df["transcript_id"]
+                                                   .isin(set(nm_chain_match_info
+                                                            ["transcript_id_novel"]
+                                                            .tolist()
+                                                             )
+                                                         ),
+                                                   nb_cpu=nb_cpu)
+                           )
     e2 = timer()
 
     eprint("took {} s".format(e2 - s2))
 
     #3 - Extract first introns from ref transcripts
-    eprint("extracting first introns from reference transcripts...")
+    # No longer needed...
 
-    s3 = timer()
-    ref_first_introns = get_terminal_regions(ref_introns,
-                                             feature_key="intron",
-                                             region_number_col="intron_number",
-                                             source=None,
-                                             filter_single=False,
-                                             which_region="first",
-                                             nb_cpu=nb_cpu
-                                             )
-
-    e3 = timer()
-    eprint("took {} s".format(e3 - s3))
+    # eprint("extracting first introns from reference transcripts...")
+    #
+    # s3 = timer()
+    # ref_first_introns = get_terminal_regions(ref_introns,
+    #                                          feature_key="intron",
+    #                                          region_number_col="intron_number",
+    #                                          source=None,
+    #                                          filter_single=False,
+    #                                          which_region="first",
+    #                                          nb_cpu=nb_cpu
+    #                                          )
+    #
+    # e3 = timer()
+    # eprint("took {} s".format(e3 - s3))
 
     #2.3 - find last exons of non-matched txs completely contained within annotated first introns
     eprint("finding novel last exons completely contained within annotated first introns...")
 
     s4 = timer()
-    novel_nm_fi = pr.PyRanges(novel_nm_last_exons.as_df(), int64=True).overlap(pr.PyRanges(ref_first_introns.as_df(), int64=True),
+    novel_nm_fi = pr.PyRanges(novel_last_exons_nm.as_df(), int64=True).overlap(pr.PyRanges(ref_first_introns.as_df(), int64=True),
                                                                                how="containment",
                                                                                strandedness="same",
                                                                                #nb_cpu=nb_cpu
@@ -667,7 +676,8 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
 
 
     if n_tr == 0:
-        eprint("0 non-matched novel transcripts with last exons contained withing annotated exons - returning initial chain matching info df")
+        eprint("0 novel transcripts with last exons contained within " +
+               "annotated exons - returning initial chain matching info df")
         return chain_match_info
 
     eprint("number of novel tx with first intron contained annotated first introns - {}".format(n_tr))
@@ -676,14 +686,9 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     eprint("finding 3'ends of first exons of novel txipts with last exons fully contained within annotated introns...")
     s5 = timer()
 
-    novel_nm_fi_fe_3p = (get_terminal_regions(novel_exons_nm.subset(lambda df: df["transcript_id"].isin(tr_ids),
-                                                                    nb_cpu=nb_cpu
-                                                                    ),
-                                              which_region="first",
-                                              source=novel_source,
-                                              nb_cpu=nb_cpu
-                                              )
-                         .three_end()
+    novel_nm_fi_fe_3p = (novel_first_exons.subset(lambda df: df["transcript_id"].isin(tr_ids),
+                                                  nb_cpu=nb_cpu)
+                                          .three_end()
                          )
 
     e5 = timer()
@@ -694,14 +699,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
     eprint("finding 3'ends of first exons of reference transcripts...")
     s6 = timer()
 
-    ref_first_exons_3p = (get_terminal_regions(ref_exons,
-                                               region_number_col="exon_number",
-                                               source=None,
-                                               filter_single=True,
-                                               which_region="first",
-                                               nb_cpu=nb_cpu
-                                               )
-                          .three_end())
+    ref_first_exons_3p = ref_first_exons.three_end()
 
     e6 = timer()
     eprint("took {} s".format(e6 - s6))
@@ -775,6 +773,7 @@ def filter_first_intron_tx(novel_exons, ref_exons, ref_introns, chain_match_info
 
         fi_ids = set(first_intron_contained_match["transcript_id_novel"].tolist())
 
+        eprint("Number of filtered first intron novel last exon tx - {}".format(len(fi_ids)))
 
         # if isinstance(chain_match_info, pd.Series):
         #     return pd.concat([pd.DataFrame(chain_match_info), first_intron_contained_match]).reset_index(drop=True)
@@ -1064,6 +1063,27 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
 
     eprint("took {} s".format(end4 - start4))
 
+    eprint("extracting first and last exons from input GTF file...")
+
+    s3 = timer()
+    novel_first_exons = get_terminal_regions(novel_exons,
+                                             region_number_col="exon_number",
+                                             source=novel_source,
+                                             filter_single=True,
+                                             which_region="first",
+                                             nb_cpu=nb_cpu)
+
+    novel_last_exons = get_terminal_regions(novel_exons,
+                                             region_number_col="exon_number",
+                                             source=novel_source,
+                                             filter_single=True,
+                                             which_region="last",
+                                             nb_cpu=nb_cpu)
+
+    e3 = timer()
+    eprint("extracting input first and last exons - took {} s".format(e3 - s3))
+
+
     eprint("extracting exons of protein_coding and lncRNA genes from reference annotation...")
 
     start5 = timer()
@@ -1071,6 +1091,26 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
     end5 = timer()
 
     eprint("took {} s".format(end5 - start5))
+
+    eprint("extracting first and last exons from reference annotation...")
+
+    s4 = timer()
+    ref_pc_first_exons = get_terminal_regions(ref_pc_exons,
+                                              region_number_col="exon_number",
+                                              source=None,
+                                              filter_single=True,
+                                              which_region="first",
+                                              nb_cpu=nb_cpu)
+
+    ref_pc_last_exons = get_terminal_regions(ref_pc_exons,
+                                              region_number_col="exon_number",
+                                              source=None,
+                                              filter_single=True,
+                                              which_region="last",
+                                              nb_cpu=nb_cpu)
+
+    e4 = timer()
+    eprint("extracting reference first and last exons - took {} s".format(e4 - s4))
 
     eprint("finding introns for each reference transcript...")
 
@@ -1121,6 +1161,26 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
         eprint("adding intron_number column to novel introns object...")
         novel_introns = add_intron_number(novel_introns, nb_cpu=nb_cpu)
 
+    eprint("Extracting reference first introns and novel last introns...")
+    s5 = timer()
+    ref_pc_first_introns = get_terminal_regions(ref_pc_introns,
+                                                region_number_col="intron_number",
+                                                feature_key="intron",
+                                                source=None,
+                                                filter_single=True,
+                                                which_region="first",
+                                                nb_cpu=nb_cpu)
+
+    novel_last_introns = get_terminal_regions(novel_introns,
+                                              region_number_col="intron_number",
+                                              feature_key="intron",
+                                              source=None,
+                                              filter_single=True,
+                                              which_region="last",
+                                              nb_cpu=nb_cpu)
+
+    e5 = timer()
+    eprint("extracting reference first and novel last introns - took {} s".format(e5 - s5))
 
     eprint("finding novel transcripts with valid matches in their intron chain to reference transcripts...")
 
@@ -1141,9 +1201,10 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
     eprint("finding novel last exons completely contained within annotated first introns...")
     s7 = timer()
 
-    fi_valid_matches = filter_first_intron_tx(novel_exons,
-                                              ref_pc_exons,
-                                              ref_pc_introns,
+    fi_valid_matches = filter_first_intron_tx(novel_first_exons,
+                                              novel_last_exons,
+                                              ref_pc_first_exons,
+                                              ref_pc_first_introns,
                                               valid_matches,
                                               novel_source,
                                               nb_cpu)
