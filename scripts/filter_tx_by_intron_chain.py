@@ -358,7 +358,7 @@ def add_intron_number(introns, id_col = "transcript_id", out_col="intron_number"
     return introns_out
 
 
-def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_introns, match_type = "transcript", max_terminal_non_match=2, nb_cpu = 1):
+def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transcript", max_terminal_non_match=2, nb_cpu = 1):
     '''
     '''
 
@@ -385,9 +385,9 @@ def filter_transcripts_by_chain(novel_exons, novel_introns, ref_exons, ref_intro
     eprint("sorting all grs by position for safety...")
     t1 = timer()
 
-    novel_exons = novel_exons.sort()
+    # novel_exons = novel_exons.sort()
     novel_introns = novel_introns.sort()
-    ref_exons = ref_exons.sort()
+    # ref_exons = ref_exons.sort()
     ref_introns = ref_introns.sort()
 
     t2 = timer()
@@ -871,7 +871,7 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
     #1. Extract complete match isoforms from chain_match_info
     exact_ids = set(chain_match_info.loc[chain_match_info["n_terminal_non_match"].astype(float).astype("Int64") == 0, "transcript_id_novel"].tolist())
 
-    eprint("ids with complete intron chain match - {}".format(",".join(exact_ids)))
+    # eprint("ids with complete intron chain match - {}".format(",".join(exact_ids)))
 
     #2. Identify 'bleedthrough' intronic events, where:
     #### - 3'end lies within an annotated intron
@@ -988,13 +988,16 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
         if int(df["n_terminal_non_match"]) == 0:
 
             if df["transcript_id_novel"] in bld_ids:
-                return "bleedthrough"
+                return "internal_bleedthrough"
 
             if df["transcript_id_novel"] in ext_ids:
                 return "utr_extension"
 
             else:
                 return "reassembled_reference"
+
+        elif df["match_class"] == "valid":
+            return df["isoform_class"]
 
         else:
             return np.nan
@@ -1122,9 +1125,7 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
     eprint("finding novel transcripts with valid matches in their intron chain to reference transcripts...")
 
     start6 = timer()
-    valid_matches = filter_transcripts_by_chain(novel_exons,
-                                                novel_introns,
-                                                ref_pc_exons,
+    valid_matches = filter_transcripts_by_chain(novel_introns,
                                                 ref_pc_introns,
                                                 match_type=match_by,
                                                 max_terminal_non_match=max_terminal_non_match,
