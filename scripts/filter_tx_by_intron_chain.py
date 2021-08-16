@@ -766,7 +766,7 @@ def filter_first_intron_tx(novel_first_exons,
                                         [["transcript_id","transcript_id_ref"]]
                                         .rename({"transcript_id": "transcript_id_novel"}, axis=1)
                                         .assign(**{"match_class": "valid",
-                                                   "n_terminal_non_match": np.nan,
+                                                   "n_terminal_non_match": 0,
                                                    "isoform_class": "first_intron_spliced"
                                                    }
                                                 ))
@@ -868,9 +868,13 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
     '''
 
     #1. Extract complete match isoforms from chain_match_info
-    exact_ids = set(chain_match_info.loc[chain_match_info["n_terminal_non_match"].astype(float).astype("Int64") == 0, "transcript_id_novel"].tolist())
+    exact_ids = set(chain_match_info.loc[(chain_match_info["match_class"] == "valid") &
+                                         (chain_match_info["n_terminal_non_match"]
+                                            .astype(float)
+                                            .astype("Int64") == 0),
+                                         "transcript_id_novel"].tolist())
 
-    # eprint("ids with complete intron chain match - {}".format(",".join(exact_ids)))
+    eprint("ids with complete intron chain match - {}".format(",".join(exact_ids)))
 
     #2. Identify 'bleedthrough' intronic events, where:
     #### - 3'end lies within an annotated intron
@@ -928,7 +932,7 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
     ##
     exact_ids_n_bl = exact_ids.difference(bleedthrough_ids)
 
-    # eprint("Ids remaining after finding bleedthrough - {}".format(",".join(exact_ids_n_bl)))
+    eprint("Ids remaining after finding bleedthrough - {}".format(",".join(exact_ids_n_bl)))
 
     ## Check for 3'UTR extensions
 
@@ -987,19 +991,17 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
         if int(df["n_terminal_non_match"]) == 0:
 
             if df["transcript_id_novel"] in bld_ids:
-                return "internal_bleedthrough"
+                return "internal_exon_bleedthrough"
 
-            if df["transcript_id_novel"] in ext_ids:
-                return "utr_extension"
+            elif df["transcript_id_novel"] in ext_ids:
+                return "ds_3utr_extension"
+
+            elif df["match_class"] == "valid" and not pd.isna(df["isoform_class"]):
+                return df["isoform_class"]
 
             else:
                 return "reassembled_reference"
 
-        elif df["match_class"] == "valid":
-            return df["isoform_class"]
-
-        else:
-            return np.nan
 
 
     # Update chain_match_info with isoform_class column
@@ -1016,12 +1018,75 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
     # id_loc = chain_match_info.columns.get_loc("transcript_id_novel")
 
     chain_match_info["isoform_class"] = chain_match_info.apply(lambda df: _temp_assign(df, bleedthrough_ids, utr_extension_ids), axis="columns")
-    chain_match_info["match_class"] = np.where(chain_match_info["isoform_class"] == "reassembled_reference", "not_valid", "valid")
+
+    chain_match_info["match_class"] = np.where(chain_match_info["isoform_class"] == "reassembled_reference", "not_valid",chain_match_info["match_class"])
 
     #) chain_match_info.assign(isoform_class=lambda df: pd.Series([_temp_assign(row, bleedthrough_ids, utr_extension_ids, n_loc, id_loc)
     #                                                                               for row in df.itertuples(index = False)]))
 
     return chain_match_info
+
+
+def annotate_3utr_introns(novel_last_introns=None,
+                          ref_last_exons=None,
+                          chain_match_info=None,
+                          class_col="isoform_class",
+                          class_key="3utr_intron_spliced",
+                          nb_cpu=1):
+    '''
+    Identify intron chain matched isoforms with a novel last intron fully contained within an annotated 3'UTR/last exon
+    '''
+
+    assert novel_last_introns is not None
+    assert ref_last_exons is not None
+    assert chain_match_info is not None
+
+    eprint("finding novel isoforms with 3'UTR introns...")
+
+    #1. Extract currently unclassified valid isoforms for checking if 3'UTR introns
+
+    valid_nc_ids = (set(chain_match_info.loc[lambda x: (x["match_class"] == "valid") &
+                                                       (pd.isna(x["isoform_class"])),
+                                             "transcript_id_novel"]
+                                        .tolist())
+                    )
+
+    novel_last_introns_nc = novel_last_introns.subset(lambda df: df["transcript_id"].isin(valid_nc_ids), nb_cpu=nb_cpu)
+
+
+    #2. Check if unclassified last exons are completely contained within annotated last exon
+    novel_3utr_introns = novel_last_introns_nc.overlap(ref_last_exons,
+                                                       how="containment",
+                                                       strandedness="same")
+
+    try:
+        # eprint(novel_nm_fi.columns)
+        utr3_tr_ids = set(novel_3utr_introns.as_df()["transcript_id"].tolist())
+        n_tr = len(utr3_tr_ids)
+
+    except AssertionError:
+        utr3_tr_ids = set()
+        n_tr = 0
+
+
+    if n_tr == 0:
+        eprint("0 novel transcripts with spliced 3'UTR intron" +
+               "fully contained within annotated last exons found")
+        return chain_match_info
+
+    eprint("n of novel tx with spliced 3'UTR intron - {}".format(n_tr))
+
+
+    #3. Update chain match info with reclassified 3'UTR intron transcripts
+    chain_match_info[class_col] = np.where(chain_match_info["transcript_id_novel"].isin(utr3_tr_ids),
+                                           class_key,
+                                           chain_match_info[class_col])
+
+    return chain_match_info
+
+
+
+
 
 
 
@@ -1162,6 +1227,7 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
         novel_introns = add_intron_number(novel_introns, nb_cpu=nb_cpu)
 
     eprint("Extracting reference first introns and novel last introns...")
+
     s5 = timer()
     ref_pc_first_introns = get_terminal_regions(ref_pc_introns,
                                                 region_number_col="intron_number",
@@ -1201,6 +1267,7 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
     eprint("finding novel last exons completely contained within annotated first introns...")
     s7 = timer()
 
+
     fi_valid_matches = filter_first_intron_tx(novel_first_exons,
                                               novel_last_exons,
                                               ref_pc_first_exons,
@@ -1215,6 +1282,8 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
     eprint("finding bleedthrough and 3'UTR extension events from transcripts with exact intron chain matches...")
     s8 = timer()
 
+    # eprint(fi_valid_matches)
+
     bl_utr_valid_matches = filter_complete_match(novel_exons,
                                                  ref_pc_exons,
                                                  ref_pc_introns,
@@ -1226,17 +1295,25 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
     eprint("finding bleedthrough and 3'UTR extension events - took {} s".format(e8 - s8))
 
 
-    if isinstance(fi_valid_matches, pd.Series):
+    eprint("classifying remaining valid isoforms...")
+    # Will have some downstream alternatively spliced last exons, internal alt spliced and spliced 3'UTR introns flopping about
+    ui3_bl_utr_valid_matches = annotate_3utr_introns(novel_last_introns,
+                                                     ref_pc_last_exons,
+                                                     bl_utr_valid_matches,
+                                                     nb_cpu=nb_cpu)
+
+
+    if isinstance(ui3_bl_utr_valid_matches, pd.Series):
         # match type was any
-        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(bl_utr_valid_matches.tolist())), nb_cpu=nb_cpu)
+        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(ui3_bl_utr_valid_matches.tolist())), nb_cpu=nb_cpu)
         valid_novel.to_gtf(out_prefix + ".gtf")
 
-    elif isinstance(fi_valid_matches, pd.DataFrame):
+    elif isinstance(ui3_bl_utr_valid_matches, pd.DataFrame):
         # match_by/match_type was transcript
-        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(bl_utr_valid_matches.loc[bl_utr_valid_matches["match_class"] == "valid", "transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
+        valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(ui3_bl_utr_valid_matches.loc[ui3_bl_utr_valid_matches["match_class"] == "valid", "transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
         valid_novel.to_gtf(out_prefix + ".gtf")
 
-        bl_utr_valid_matches.to_csv(out_prefix + ".match_stats.tsv", sep="\t", header=True, index=False)
+        ui3_bl_utr_valid_matches.to_csv(out_prefix + ".match_stats.tsv", sep="\t", header=True, index=False,na_rep="NA")
 
 
     end = timer()
