@@ -874,7 +874,7 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
                                             .astype("Int64") == 0),
                                          "transcript_id_novel"].tolist())
 
-    eprint("ids with complete intron chain match - {}".format(",".join(exact_ids)))
+    # eprint("ids with complete intron chain match - {}".format(",".join(exact_ids)))
 
     #2. Identify 'bleedthrough' intronic events, where:
     #### - 3'end lies within an annotated intron
@@ -932,7 +932,7 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
     ##
     exact_ids_n_bl = exact_ids.difference(bleedthrough_ids)
 
-    eprint("Ids remaining after finding bleedthrough - {}".format(",".join(exact_ids_n_bl)))
+    # eprint("Ids remaining after finding bleedthrough - {}".format(",".join(exact_ids_n_bl)))
 
     ## Check for 3'UTR extensions
 
@@ -1085,9 +1085,61 @@ def annotate_3utr_introns(novel_last_introns=None,
     return chain_match_info
 
 
+def annotate_distal_last_exons(novel_last_introns=None,
+                               ref_last_exons=None,
+                               chain_match_info=None,
+                               class_col="isoform_class",
+                               class_key="ds_alt_spliced",
+                               nb_cpu=1):
+    '''
+    Annotate chain-matched novel isoforms as distal alternative last exons
+    ref last exon must be completely contained within ref last exon
+    '''
+
+    #1. Extract currently unclassified valid isoforms for checking if alt distal LEs
+
+    valid_nc_ids = (set(chain_match_info.loc[lambda x: (x["match_class"] == "valid") &
+                                                       (pd.isna(x["isoform_class"])),
+                                             "transcript_id_novel"]
+                                        .tolist())
+                    )
+
+    novel_last_introns_nc = novel_last_introns.subset(lambda df: df["transcript_id"].isin(valid_nc_ids), nb_cpu=nb_cpu)
 
 
+    #2. find ref last exons completely contained within novel last intron
+    ref_last_exons_cnt = ref_last_exons.overlap(novel_last_introns_nc,
+                                                strandedness="same",
+                                                how="containment")
 
+    #3. Get novel last introns overlaping with completely contained last exons
+    ds_spliced = novel_last_introns_nc.overlap(ref_last_exons_cnt,
+                                               strandedness="same")
+
+    try:
+        # eprint(novel_nm_fi.columns)
+        ds_spliced_ids = set(ds_spliced.as_df()["transcript_id"].tolist())
+        n_tr = len(ds_spliced_ids)
+
+    except AssertionError:
+        ds_spliced_ids = set()
+        n_tr = 0
+
+
+    if n_tr == 0:
+        eprint("0 novel transcripts with spliced 3'UTR intron" +
+               "fully contained within annotated last exons found")
+        return chain_match_info
+
+    eprint("n of novel tx with downstream spliced novel last exon - {}".format(n_tr))
+
+
+    #3. Update chain match info with reclassified 3'UTR intron transcripts
+    chain_match_info[class_col] = np.where(chain_match_info["transcript_id_novel"].isin(ds_spliced_ids),
+                                           class_key,
+                                           chain_match_info[class_col])
+
+    return chain_match_info
 
 
 def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, novel_source, nb_cpu):
@@ -1301,6 +1353,11 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
                                                      ref_pc_last_exons,
                                                      bl_utr_valid_matches,
                                                      nb_cpu=nb_cpu)
+
+    ui3_bl_utr_valid_matches = annotate_distal_last_exons(novel_last_introns,
+                                                          ref_pc_last_exons,
+                                                          ui3_bl_utr_valid_matches,
+                                                          nb_cpu=nb_cpu)
 
 
     if isinstance(ui3_bl_utr_valid_matches, pd.Series):
