@@ -98,7 +98,7 @@ rule intron_chain_filter:
         os.path.join(LOG_SUBDIR, "{sample}.intron_chain_filter.log")
 
     resources:
-        threads = 4
+        threads = config["intron_chain_filter_threads"]
 
     shell:
         """

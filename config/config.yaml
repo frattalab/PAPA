@@ -42,6 +42,10 @@ intron_chain_filter_mode: "any"
 # Default: 2 (equivalent to allowing the penultimate exon of transcript to also be novel)
 max_terminal_non_match: 2
 
+# Number of threads/cpus for scripts/filter_tx_by_intron_chain.py
+# Default: 1
+intron_chain_filter_threads: 1
+
 
 # Default: 0.01
 min_isoform_fraction_abundance: 0.01
