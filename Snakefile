@@ -19,6 +19,7 @@ GTF = config["annotation_gtf"]
 # Make sure it has a slash at end of path
 OUTPUT_DIR = os.path.join(config["main_output_dir"],"")
 STRINGTIE_SUBDIR = os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"], "")
+SALMON_SUBDIR = os.path.join(OUTPUT_DIR, config["salmon_subdir_name"], "")
 LOG_SUBDIR = os.path.join(OUTPUT_DIR, config["logs_subdir_name"], "")
 
 include: "rules/stringtie.smk"
@@ -31,9 +32,10 @@ wildcard_constraints:
 
 rule all:
     input:
+        expand(os.path.join(SALMON_SUBDIR, "quant", "{sample}","quant.sf"), sample=SAMPLES),
         expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.assembled.gtf"), sample=SAMPLES),
-        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged.gtf"),
-        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.merged.gtf")
+        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged.combined.gtf"),
+        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.novel.combined.gtf")
 
 
 def get_bam(sample, options, output_dir):

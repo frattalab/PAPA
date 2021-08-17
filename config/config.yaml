@@ -6,6 +6,14 @@ sample_tbl: config/local_ward_ipsc_example_sample_tbl.csv
 
 annotation_gtf: data/annotation/gencode.v34.annotation.gtf
 
+# 'gencode' if GENCODE otherwise any other string
+# Used for Salmon index
+annotation_source: "gencode"
+
+# An index file should also exist in same directory (suffixed with .fai)
+# Can be generated using samtools faidx
+genome_fasta: data/annotation/...
+
 # Put "none" for now. Other options possibly added in future...
 pre_stringtie_processing: "none"
 
@@ -17,6 +25,9 @@ pre_stringtie_processing: "none"
 # https://rnabio.org/module-09-appendix/0009/12/01/StrandSettings/
 # https://littlebitofdata.com/en/2017/08/strandness_in_rnaseq/
 strandedness: "--rf"
+
+salmon_index_threads: 2
+salmon_quant_threads: 2
 
 ####------
 ## Stringtie options/parameters
@@ -134,4 +145,5 @@ keep_retained_introns_merge: False
 # Names of subdirectories for individual steps. No need to change these unless you don't like them!
 ####
 stringtie_subdir_name: stringtie/
+salmon_subdir_name: salmon/
 logs_subdir_name: logs/
