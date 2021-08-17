@@ -6,7 +6,7 @@ rule custom_txome_fasta:
     For use with Salmon
     '''
     input:
-        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged.gtf")
+        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged.combined.gtf")
 
     output:
         os.path.join(SALMON_SUBDIR, "papa.transcripts.fa")
