@@ -41,9 +41,6 @@ rule generate_full_decoys:
         gentrome_fa = os.path.join(SALMON_SUBDIR, "gentrome.fa"),
         decoys = os.path.join(SALMON_SUBDIR, "decoys.txt")
 
-    params:
-        outdir = DECOYS_DIR
-
     log:
         os.path.join(LOG_SUBDIR, "generate_full_decoys.log")
 
