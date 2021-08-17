@@ -62,7 +62,7 @@ rule salmon_index:
         os.path.join(SALMON_SUBDIR, "index", "pos.bin")
 
     params:
-        k = config["kmer_size"],
+        k = config["salmon_kmer_size"],
         outdir = os.path.join(SALMON_SUBDIR, "index","")
 
     threads:
@@ -118,5 +118,8 @@ rule salmon_quant_pe:
         --mates2 {input.fast2} \
         --threads {threads} \
         -o {params.output_dir} \
+        --seqBias \
+        --posBias \
+        --gcBias \
         2> {log}
         """

@@ -29,6 +29,8 @@ strandedness: "--rf"
 salmon_index_threads: 2
 salmon_quant_threads: 2
 
+salmon_kmer_size: 31
+
 ####------
 ## Stringtie options/parameters
 ####------
