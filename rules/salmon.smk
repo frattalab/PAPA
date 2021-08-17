@@ -107,7 +107,7 @@ rule salmon_quant_pe:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "salmon_quant_pe.log")
+        os.path.join(LOG_SUBDIR, "salmon_quant_pe.{sample}.log")
 
     shell:
         """
