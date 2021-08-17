@@ -88,37 +88,38 @@ rule salmon_index:
         2> {log}
         """
 
+
 rule salmon_quant_pe:
     input:
         fast1 = lambda wildcards: OPTIONS[wildcards.sample]["fastq1"],
         fast2 = lambda wildcards: OPTIONS[wildcards.sample]["fastq2"],
         index = os.path.join(SALMON_SUBDIR, "index", "seq.bin")
 
-        output:
-            os.path.join(SALMON_SUBDIR, "quant", "{sample}", "quant.sf")
+    output:
+        os.path.join(SALMON_SUBDIR, "quant", "{sample}", "quant.sf")
 
-        params:
-            index_dir = os.path.join(SALMON_SUBDIR, "index",),
-            output_dir = os.path.join(SALMON_SUBDIR, "quant", "{sample}"),
-            libtype = "A"
+    params:
+        index_dir = os.path.join(SALMON_SUBDIR, "index",),
+        output_dir = os.path.join(SALMON_SUBDIR, "quant", "{sample}"),
+        libtype = "A"
 
-        threads:
-            config["salmon_quant_threads"]
+    threads:
+        config["salmon_quant_threads"]
 
-        conda:
-            "../envs/papa.yaml"
+    conda:
+        "../envs/papa.yaml"
 
-        log:
-            os.path.join(LOG_SUBDIR, "salmon_quant_pe.log")
+    log:
+        os.path.join(LOG_SUBDIR, "salmon_quant_pe.log")
 
-        shell:
-            """
-            salmon quant \
-            --index {params.index_dir} \
-            --libType {params.libtype} \
-            --mates1 {input.fast1} \
-            --mates2 {input.fast2} \
-            --threads {threads} \
-            -o {params.output_dir} \
-            2> {log}
-            """
+    shell:
+        """
+        salmon quant \
+        --index {params.index_dir} \
+        --libType {params.libtype} \
+        --mates1 {input.fast1} \
+        --mates2 {input.fast2} \
+        --threads {threads} \
+        -o {params.output_dir} \
+        2> {log}
+        """
