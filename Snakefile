@@ -23,6 +23,7 @@ SALMON_SUBDIR = os.path.join(OUTPUT_DIR, config["salmon_subdir_name"], "")
 LOG_SUBDIR = os.path.join(OUTPUT_DIR, config["logs_subdir_name"], "")
 
 include: "rules/stringtie.smk"
+include: "rules/salmon.smk"
 
 
 localrules: all, compose_gtf_list_stringtie
