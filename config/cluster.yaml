@@ -1,0 +1,53 @@
+__default__:
+  h_vmem: 4G
+  tmem: 4G
+  h_rt:  2:00:00
+  submission_string: " "
+
+stringtie:
+  h_vmem: 14G
+  tmem: 14G
+  h_rt:  8:00:00
+  submission_string: " "
+
+intron_chain_filter:
+  h_vmem: 10G
+  tmem: 10G
+  h_rt:  8:00:00
+  submission_string: " "
+
+gtf_merge_novel:
+  h_vmem: 6G
+  tmem: 6G
+  h_rt:  4:00:00
+  submission_string: " "
+
+gtf_merge_ref:
+  h_vmem: 6G
+  tmem: 6G
+  h_rt:  4:00:00
+  submission_string: " "
+
+custom_txome_fasta:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  4:00:00
+  submission_string: " "
+
+generate_full_decoys:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  4:00:00
+  submission_string: " "
+
+salmon_index:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  12:00:00
+  submission_string: "-pe smp 2 -R y"
+
+salmon_quant_pe:
+  h_vmem: 8G
+  tmem: 8G
+  submission_string: "-pe smp 2 -R y"
+  h_rt: 12:00:00
