@@ -859,7 +859,14 @@ def get_internal_exons(gr,
     return out_gr
 
 
-def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info, novel_source, nb_cpu=1):
+def filter_complete_match(novel_last_exons,
+                          ref_first_exons,
+                          ref_last_exons,
+                          ref_exons,
+                          ref_introns,
+                          chain_match_info,
+                          novel_source,
+                          nb_cpu=1):
     '''
     Filter transcripts with complete intron chain matches for bleedthrough intronic last exons and 3'UTR extensions
     Reassembled reference transcripts will have a complete intron chain match to ref but not be meaningful novel isoforms
@@ -882,13 +889,7 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
     #### - 3'end of  novel last exon is downstream of overlapping ref internal intron
 
     # A - check three end  of last is within annotated intron.
-    m_l_novel_exons = get_terminal_regions(novel_exons.subset(lambda df: df["transcript_id"].isin(exact_ids), nb_cpu=nb_cpu),
-                                           region_number_col="exon_number",
-                                           source=novel_source,
-                                           filter_single=True,
-                                           which_region="last",
-                                           nb_cpu=nb_cpu
-                                           )
+    m_l_novel_exons = novel_last_exons.subset(lambda df: df["transcript_id"].isin(exact_ids), nb_cpu=nb_cpu)
 
     m_l_novel_exons_3p = m_l_novel_exons.three_end()
 
@@ -929,6 +930,28 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
 
     bleedthrough_ids = find_extensions(m_l_novel_exons_bl, ref_exons_int, nb_cpu=nb_cpu)
 
+    eprint("number of putative internal bleedthrough events - {}".format(len(bleedthrough_ids)))
+
+    eprint("checking if putative internal events also overlap with ref last exons...")
+
+    # Find putative bleedthrough exons that do not overlap any known last exon
+    # i.e. Overlaps an annotated 'hybrid' internal exon
+    # and 3'end is contained within downstream corresponding intron
+    # But exon can also act as terminal exon with downstream poly(A) site
+    # the sometimes terminates further downstream
+    # Putative bleedthrough events could just be reassembled hybrid terminal exons
+
+    bleedthrough_ids = (set(m_l_novel_exons_bl.subset(lambda df: df["transcript_id"].isin(bleedthrough_ids))
+                                              .overlap(ref_last_exons,
+                                                       strandedness="same",
+                                                       invert=True)
+                                              .as_df()
+                                              ["transcript_id"].tolist()
+                            )
+                        )
+
+    eprint("number of internal bleedthrough events after filtering out those overlapping ref last exons - {}".format(len(bleedthrough_ids)))
+
     ##
     exact_ids_n_bl = exact_ids.difference(bleedthrough_ids)
 
@@ -948,24 +971,24 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
         m_l_novel_exons_n_bl_3p = m_l_novel_exons_n_bl_3p.assign("End", lambda df: df.End + 1)
 
     # Get reference first exons
-    ref_exons_f = get_terminal_regions(ref_exons,
-                                       region_number_col="exon_number",
-                                       source=None,
-                                       filter_single=True,
-                                       which_region="first",
-                                       nb_cpu=nb_cpu
-                                       )
+    # ref_exons_f = get_terminal_regions(ref_exons,
+    #                                    region_number_col="exon_number",
+    #                                    source=None,
+    #                                    filter_single=True,
+    #                                    which_region="first",
+    #                                    nb_cpu=nb_cpu
+    #                                    )
+    #
+    # ref_exons_l = get_terminal_regions(ref_exons,
+    #                                    region_number_col="exon_number",
+    #                                    source=None,
+    #                                    filter_single=True,
+    #                                    which_region="last",
+    #                                    nb_cpu=nb_cpu
+    #                                    )
 
-    ref_exons_l = get_terminal_regions(ref_exons,
-                                       region_number_col="exon_number",
-                                       source=None,
-                                       filter_single=True,
-                                       which_region="last",
-                                       nb_cpu=nb_cpu
-                                       )
 
-
-    not_fe_3p_ids = (set(m_l_novel_exons_n_bl_3p.overlap(ref_exons_f,
+    not_fe_3p_ids = (set(m_l_novel_exons_n_bl_3p.overlap(ref_first_exons,
                                                          strandedness="same",
                                                          how="containment",
                                                          invert=True)
@@ -976,7 +999,29 @@ def filter_complete_match(novel_exons, ref_exons, ref_introns, chain_match_info,
 
     m_l_novel_exons_n_bl = m_l_novel_exons_n_bl.subset(lambda df: df["transcript_id"].isin(not_fe_3p_ids), nb_cpu=nb_cpu)
 
-    utr_extension_ids = find_extensions(m_l_novel_exons_n_bl, ref_exons_l, nb_cpu=nb_cpu)
+    utr_extension_ids = find_extensions(m_l_novel_exons_n_bl, ref_last_exons, nb_cpu=nb_cpu)
+
+    eprint("number of putative UTR/last exon extension events - {}".format(len(utr_extension_ids)))
+    # Check that 'putative 3'UTR extensions' do not overlap with any reference internal exons
+    # Genes with proximal annotated last exons could have extensions that
+    # correspond to intron retention
+    # Or extensions that terminate within annotated internal exons
+    # This is a heuristic to reduce the number of FP calls
+
+    eprint("checking if 3'ends of putative extension events overlap with other exons...")
+
+    utr_extension_ids = (set(m_l_novel_exons_n_bl_3p.subset(lambda df: df["transcript_id"].isin(utr_extension_ids),
+                                                            nb_cpu=nb_cpu)
+                                                    .overlap(ref_exons,
+                                                             strandedness="same",
+                                                             invert=True)
+                                                    .as_df()["transcript_id"]
+                                                    .tolist()
+                             )
+                         )
+
+    eprint("number of UTR/last exon extension events after filtering out " +
+           "any overlapping ref exons - {}".format(len(utr_extension_ids)))
 
     # both_classes = bleedthrough_ids.union(utr_extension_ids)
 
@@ -1336,7 +1381,9 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
 
     # eprint(fi_valid_matches)
 
-    bl_utr_valid_matches = filter_complete_match(novel_exons,
+    bl_utr_valid_matches = filter_complete_match(novel_last_exons,
+                                                 ref_pc_first_exons,
+                                                 ref_pc_last_exons,
                                                  ref_pc_exons,
                                                  ref_pc_introns,
                                                  fi_valid_matches,
