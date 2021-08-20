@@ -1187,6 +1187,83 @@ def annotate_distal_last_exons(novel_last_introns=None,
     return chain_match_info
 
 
+def annotate_internal_spliced(novel_last_exons=None,
+                              ref_internal_introns=None,
+                              ref_exons=None,
+                              chain_match_info=None,
+                              class_col="isoform_class",
+                              class_key="internal_intron_spliced",
+                              nb_cpu=1):
+    '''
+    Classify valid isoforms as 'internal_intron_spliced' if novel last exon is fully contained within annotated intron
+    Also make a quick check that putative do not overlap with any known exons
+    '''
+
+    valid_nc_ids = (set(chain_match_info.loc[lambda x: (x["match_class"] == "valid") &
+                                                       (pd.isna(x["isoform_class"])),
+                                             "transcript_id_novel"]
+                                        .tolist())
+                    )
+
+    novel_last_exons_nc = novel_last_exons.subset(lambda df: df["transcript_id"].isin(valid_nc_ids), nb_cpu=nb_cpu)
+
+    # Find unclassified valid events completely contained within annotated introns
+    int_spliced = novel_last_exons_nc.overlap(ref_internal_introns,
+                                               strandedness="same",
+                                               how="containment")
+
+    int_spliced_pre = set(int_spliced.as_df()["transcript_id"].tolist())
+
+    eprint("before checking for overlap with ref exons" +
+           ", number of putative novel internal spliced last exons" +
+           " is {}".format(len(int_spliced_pre)))
+
+    int_spliced_post = (set(int_spliced.overlap(ref_exons,
+                                             strandedness="same",
+                                             invert=True)
+                                    .as_df()
+                                    ["transcript_id"].tolist()
+                            )
+                        )
+
+    eprint("after checking for overlap with ref exons" +
+           ", number of putative novel internal spliced last exons" +
+           " is {}".format(len(int_spliced_post))
+           )
+
+    # Get set of intron contained but exon overlapping tx ids
+    int_spliced_ex_olap = int_spliced_pre.difference(int_spliced_post)
+
+    # Update chain_match_info with isoform_class column
+    conditions = [(chain_match_info["match_class"] == "valid") &
+                  (chain_match_info["transcript_id_novel"].isin(int_spliced_post)),
+                  (chain_match_info["match_class"] == "valid") &
+                  (chain_match_info["transcript_id_novel"].isin(int_spliced_ex_olap))
+                 ]
+
+    choices = [class_key, class_key + "_exon_overlap"]
+
+    chain_match_info[class_col] = np.select(conditions,
+                                            choices,
+                                            default=chain_match_info["isoform_class"])
+
+    # exon_overlap events will no longer be considered valid
+    # These could be last exons bleeding into internal exons,
+    # where StringTie is unlikely to define 3'end robustly
+
+    chain_match_info["match_class"] = np.where(chain_match_info[class_col] == class_key + "_exon_overlap",
+                                               "not_valid",
+                                               chain_match_info["match_class"]
+                                               )
+
+    return chain_match_info
+
+
+
+
+
+
+
 def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, novel_source, nb_cpu):
     '''
     '''
@@ -1405,6 +1482,18 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
                                                           ref_pc_last_exons,
                                                           ui3_bl_utr_valid_matches,
                                                           nb_cpu=nb_cpu)
+
+    ui3_bl_utr_valid_matches = annotate_internal_spliced(novel_last_exons,
+                                                         ref_pc_introns,
+                                                         ref_pc_exons,
+                                                         ui3_bl_utr_valid_matches,
+                                                         nb_cpu=nb_cpu)
+
+    # Have made all specific classifications and filtered where possible
+    # Remaining valid isoforms likely have complex structures
+    ui3_bl_utr_valid_matches["match_class"] = np.where((ui3_bl_utr_valid_matches["match_class"] == "valid") &
+                                                       (pd.isna(ui3_bl_utr_valid_matches["isoform_class"])),
+                                                        "other", np.nan)
 
 
     if isinstance(ui3_bl_utr_valid_matches, pd.Series):
