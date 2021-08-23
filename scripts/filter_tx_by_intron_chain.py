@@ -928,9 +928,9 @@ def filter_complete_match(novel_last_exons,
     # C - find last exons with 3'end downstream of annotated internal exon 3'end
     eprint("finding tx ids of novel isoforms with bleedthrough last exons...")
 
-    bleedthrough_ids = find_extensions(m_l_novel_exons_bl, ref_exons_int, nb_cpu=nb_cpu)
+    bleedthrough_ids_pre = find_extensions(m_l_novel_exons_bl, ref_exons_int, nb_cpu=nb_cpu)
 
-    eprint("number of putative internal bleedthrough events - {}".format(len(bleedthrough_ids)))
+    eprint("number of putative internal bleedthrough events - {}".format(len(bleedthrough_ids_pre)))
 
     eprint("checking if putative internal events also overlap with ref last exons...")
 
@@ -941,7 +941,7 @@ def filter_complete_match(novel_last_exons,
     # the sometimes terminates further downstream
     # Putative bleedthrough events could just be reassembled hybrid terminal exons
 
-    bleedthrough_ids = (set(m_l_novel_exons_bl.subset(lambda df: df["transcript_id"].isin(bleedthrough_ids))
+    bleedthrough_ids_post = (set(m_l_novel_exons_bl.subset(lambda df: df["transcript_id"].isin(bleedthrough_ids_pre))
                                               .overlap(ref_last_exons,
                                                        strandedness="same",
                                                        invert=True)
@@ -950,10 +950,13 @@ def filter_complete_match(novel_last_exons,
                             )
                         )
 
-    eprint("number of internal bleedthrough events after filtering out those overlapping ref last exons - {}".format(len(bleedthrough_ids)))
+    eprint("number of internal bleedthrough events after filtering out those overlapping ref last exons - {}".format(len(bleedthrough_ids_post)))
+
+    # Get a set of ids of valid bleedthrough events overlapping ref last exons
+    bleedthrough_ids_le_olap = bleedthrough_ids_pre.difference(bleedthrough_ids_post)
 
     ##
-    exact_ids_n_bl = exact_ids.difference(bleedthrough_ids)
+    exact_ids_n_bl = exact_ids.difference(bleedthrough_ids_post)
 
     # eprint("Ids remaining after finding bleedthrough - {}".format(",".join(exact_ids_n_bl)))
 
@@ -999,9 +1002,10 @@ def filter_complete_match(novel_last_exons,
 
     m_l_novel_exons_n_bl = m_l_novel_exons_n_bl.subset(lambda df: df["transcript_id"].isin(not_fe_3p_ids), nb_cpu=nb_cpu)
 
-    utr_extension_ids = find_extensions(m_l_novel_exons_n_bl, ref_last_exons, nb_cpu=nb_cpu)
+    utr_extension_ids_pre = find_extensions(m_l_novel_exons_n_bl, ref_last_exons, nb_cpu=nb_cpu)
 
-    eprint("number of putative UTR/last exon extension events - {}".format(len(utr_extension_ids)))
+    eprint("number of putative UTR/last exon extension events - {}".format(len(utr_extension_ids_pre)))
+
     # Check that 'putative 3'UTR extensions' do not overlap with any reference internal exons
     # Genes with proximal annotated last exons could have extensions that
     # correspond to intron retention
@@ -1010,22 +1014,25 @@ def filter_complete_match(novel_last_exons,
 
     eprint("checking if 3'ends of putative extension events overlap with other exons...")
 
-    utr_extension_ids = (set(m_l_novel_exons_n_bl_3p.subset(lambda df: df["transcript_id"].isin(utr_extension_ids),
+    utr_extension_ids_post = (set(m_l_novel_exons_n_bl_3p.subset(lambda df: df["transcript_id"].isin(utr_extension_ids_pre),
                                                             nb_cpu=nb_cpu)
-                                                    .overlap(ref_exons,
-                                                             strandedness="same",
-                                                             invert=True)
-                                                    .as_df()["transcript_id"]
-                                                    .tolist()
-                             )
-                         )
+                                                         .overlap(ref_exons,
+                                                                  strandedness="same",
+                                                                  invert=True)
+                                                         .as_df()["transcript_id"]
+                                                         .tolist()
+                                  )
+                              )
 
     eprint("number of UTR/last exon extension events after filtering out " +
-           "any overlapping ref exons - {}".format(len(utr_extension_ids)))
+           "any overlapping ref exons - {}".format(len(utr_extension_ids_post)))
+
+    # Get a set of IDs classified as extensions but olapping with other exons
+    utr_extension_ids_e_olap = utr_extension_ids_pre.difference(utr_extension_ids_pre)
 
     # both_classes = bleedthrough_ids.union(utr_extension_ids)
 
-    def _temp_assign(df, bld_ids, ext_ids):
+    def _temp_assign(df, bld_ids, bld_ids_out, ext_ids, ext_ids_out):
 
         try:
             int(df["n_terminal_non_match"])
@@ -1038,8 +1045,14 @@ def filter_complete_match(novel_last_exons,
             if df["transcript_id_novel"] in bld_ids:
                 return "internal_exon_bleedthrough"
 
+            elif df["transcript_id_novel"] in bld_ids_out:
+                return "internal_exon_bleedthrough_last_exon_overlap"
+
             elif df["transcript_id_novel"] in ext_ids:
                 return "ds_3utr_extension"
+
+            elif df["transcript_id_novel"] in ext_ids_out:
+                return "ds_3utr_extension_internal_exon_overlap"
 
             elif df["match_class"] == "valid" and not pd.isna(df["isoform_class"]):
                 return df["isoform_class"]
@@ -1062,9 +1075,20 @@ def filter_complete_match(novel_last_exons,
     # n_loc = chain_match_info.columns.get_loc("n_terminal_non_match")
     # id_loc = chain_match_info.columns.get_loc("transcript_id_novel")
 
-    chain_match_info["isoform_class"] = chain_match_info.apply(lambda df: _temp_assign(df, bleedthrough_ids, utr_extension_ids), axis="columns")
+    chain_match_info["isoform_class"] = chain_match_info.apply(lambda df: _temp_assign(df,
+                                                                                       bleedthrough_ids_post,
+                                                                                       bleedthrough_ids_le_olap,
+                                                                                       utr_extension_ids_post,
+                                                                                       utr_extension_ids_e_olap),
+                                                               axis="columns")
 
-    chain_match_info["match_class"] = np.where(chain_match_info["isoform_class"] == "reassembled_reference", "not_valid",chain_match_info["match_class"])
+    # Update filtered out isoforms to not_valid so not included in filtered GTF
+
+    chain_match_info["match_class"] = np.where(chain_match_info["isoform_class"].isin(["reassembled_reference",
+                                                                                       "ds_3utr_extension_internal_exon_overlap",
+                                                                                       "internal_exon_bleedthrough_last_exon_overlap"]),
+                                                                                      "not_valid",
+                                                                                      chain_match_info["match_class"])
 
     #) chain_match_info.assign(isoform_class=lambda df: pd.Series([_temp_assign(row, bleedthrough_ids, utr_extension_ids, n_loc, id_loc)
     #                                                                               for row in df.itertuples(index = False)]))
@@ -1257,11 +1281,6 @@ def annotate_internal_spliced(novel_last_exons=None,
                                                )
 
     return chain_match_info
-
-
-
-
-
 
 
 def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, novel_source, nb_cpu):
@@ -1506,10 +1525,30 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
         valid_novel = novel.subset(lambda df: df["transcript_id"].isin(set(ui3_bl_utr_valid_matches.loc[ui3_bl_utr_valid_matches["match_class"] == "valid", "transcript_id_novel"].tolist())), nb_cpu=nb_cpu)
         valid_novel.to_gtf(out_prefix + ".gtf")
 
-        summary_counts = ui3_bl_utr_valid_matches.loc[lambda x: x["match_class"] == "valid","isoform_class"].value_counts(dropna=False)
+        summary_counts = (ui3_bl_utr_valid_matches.loc[lambda x: x["match_class"] == "valid", :]
+                          .drop_duplicates(subset=["transcript_id_novel"])
+                          ["isoform_class"]
+                          .value_counts(dropna=False)
+                          )
+
+        summary_counts_nv = (ui3_bl_utr_valid_matches.loc[lambda x: x["match_class"] == "not_valid", :]
+                          .drop_duplicates(subset=["transcript_id_novel"])
+                          ["isoform_class"]
+                          .value_counts(dropna=False)
+                          )
         # eprint(summary_counts)
 
-        pd.DataFrame(summary_counts).reset_index().to_csv(out_prefix + ".valid.class_summary_counts.tsv", sep="\t", header=["isoform_class","count"], index=False, na_rep="NA")
+        pd.DataFrame(summary_counts).reset_index().to_csv(out_prefix + ".valid.class_summary_counts.tsv",
+                                                          sep="\t",
+                                                          header=["isoform_class","count"],
+                                                          index=False,
+                                                          na_rep="NA")
+
+        pd.DataFrame(summary_counts_nv).reset_index().to_csv(out_prefix + ".not_valid.class_summary_counts.tsv",
+                                                             sep="\t",
+                                                             header=["isoform_class","count"],
+                                                             index=False,
+                                                             na_rep="NA")
 
         ui3_bl_utr_valid_matches.to_csv(out_prefix + ".match_stats.tsv", sep="\t", header=True, index=False,na_rep="NA")
 
