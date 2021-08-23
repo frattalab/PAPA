@@ -827,12 +827,12 @@ def find_extensions(gr, ref_gr, id_col = "transcript_id", nb_cpu=1):
     #          )
 
 
-def get_internal_exons(gr,
-                       feature_col="Feature",
-                       feature_key="exon",
-                       id_col="transcript_id",
-                       region_number_col="exon_number",
-                       nb_cpu=1):
+def get_internal_regions(gr,
+                         feature_col="Feature",
+                         feature_key="exon",
+                         id_col="transcript_id",
+                         region_number_col="exon_number",
+                         ):
     '''
     Return gr of internal exons for each transcript_id
     In process, exon_number_col will be converted to type 'int'
@@ -844,19 +844,28 @@ def get_internal_exons(gr,
     # Pull out exons, convert exon_number to int
     exons_gr = gr.assign(region_number_col,
                          lambda df: df[region_number_col].astype(float).astype("Int64"),
-                         nb_cpu = nb_cpu)
+                         nb_cpu=1)
 
-    # Filter out last exons for each transcript (max exon_number)
-    # & first exons for each transcript (exon_number == 1)
-    out_gr = (exons_gr.apply(lambda df:
-                             df.loc[~((df.groupby(id_col)[region_number_col].idxmax()) |
-                                       (df[region_number_col] != 1)
-                                       ),
-                                     ],
-                             nb_cpu=nb_cpu)
-              )
+    # Make sure gr is sorted by transcript_id & 'region number' (ascending order so 1..n)
+    exons_gr = exons_gr.apply(lambda df: df.sort_values(by=[id_col,
+                                                            region_number_col
+                                                            ],
+                                                        ascending=True),
+                              nb_cpu=1)
+
+    # Filter out 1st + last exons for each ID
+    # first exons for each transcript (.ne(1))
+    # keep="last" sets last dup value to 'False' & all others True
+    # This will filter out last exons
+
+    out_gr = (exons_gr.subset(lambda df: (df[region_number_col].ne(1).astype(bool)) &
+                     (df.duplicated(subset=["transcript_id"], keep="last")),
+                     nb_cpu=1
+                    )
+             )
 
     return out_gr
+
 
 
 def filter_complete_match(novel_last_exons,
@@ -920,7 +929,7 @@ def filter_complete_match(novel_last_exons,
     eprint("finding reference internal exons...")
     s2 = timer()
 
-    ref_exons_int = get_internal_exons(ref_exons, nb_cpu=nb_cpu)
+    ref_exons_int = get_internal_regions(ref_exons)
 
     e2 = timer()
     eprint("took {} s".format(e2 - s2))
