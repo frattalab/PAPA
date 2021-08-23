@@ -48,23 +48,12 @@ include: "rules/salmon.smk"
 localrules: all, compose_gtf_list_stringtie
 
 wildcard_constraints:
-    sample = "|".join(SAMPLES),
-    min_frac = "min_frac_\\d$",
-    #.join(param_list(config["min_isoform_fraction_abundance"])),
-    min_jnc = "min_jnc_\\d$",
-    #.join(param_list(config["min_junction_reads"])),
-    min_cov = "min_cov_\\d$"
-    #.join(param_list(config["min_txipt_coverage"]))
+    sample = "|".join(SAMPLES)
 
 rule all:
     input:
         expand(os.path.join(SALMON_SUBDIR, "quant", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}","quant.sf"),
                sample=SAMPLES,
-               min_jnc=min_jnc_vals,
-               min_frac=min_frac_vals,
-               min_cov=min_cov_vals
-               ),
-        expand(os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}.intron_chain_filtered.assembled.gtf"),                sample=SAMPLES,
                min_jnc=min_jnc_vals,
                min_frac=min_frac_vals,
                min_cov=min_cov_vals

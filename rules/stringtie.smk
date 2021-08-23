@@ -1,3 +1,9 @@
+# wildcard_constraints:
+#     sample = "|".join(SAMPLES),
+#     min_frac = "min_frac_\\d$",
+#     min_jnc = "min_jnc_\\d$",
+#     min_cov = "min_cov_\\d$"
+
 
 rule stringtie:
     input:
