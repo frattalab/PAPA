@@ -3,10 +3,21 @@ import pandas as pd
 
 configfile: "config/config.yaml"
 
+def param_list(param):
+    '''
+    Return list of all param values converted to string
+    If param is not a list/iterable, coerced to a single value list
+    '''
 
+    try:
+        param = list(param)
+        out = [str(p) for p in param]
 
+    except TypeError:
+        # Not an iterable
+        out = [str(param)]
 
-
+    return out
 
 
 sample_tbl = pd.read_csv(config["sample_tbl"], index_col="sample_name")
@@ -17,10 +28,18 @@ OPTIONS = sample_tbl.to_dict(orient="index")
 GTF = config["annotation_gtf"]
 
 # Make sure it has a slash at end of path
-OUTPUT_DIR = os.path.join(config["main_output_dir"],"")
+OUTPUT_DIR = os.path.join(config["main_output_dir"], "")
 STRINGTIE_SUBDIR = os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"], "")
 SALMON_SUBDIR = os.path.join(OUTPUT_DIR, config["salmon_subdir_name"], "")
 LOG_SUBDIR = os.path.join(OUTPUT_DIR, config["logs_subdir_name"], "")
+
+min_frac_vals = param_list(config["min_isoform_fraction_abundance"])
+min_jnc_vals = param_list(config["min_junction_reads"])
+min_cov_vals = param_list(config["min_txipt_coverage"])
+
+print(min_frac_vals)
+print(min_jnc_vals)
+print(min_cov_vals)
 
 include: "rules/stringtie.smk"
 include: "rules/salmon.smk"
@@ -29,14 +48,31 @@ include: "rules/salmon.smk"
 localrules: all, compose_gtf_list_stringtie
 
 wildcard_constraints:
-    sample = "|".join(SAMPLES)
+    sample = "|".join(SAMPLES),
+    min_frac = "min_frac_\\d$",
+    #.join(param_list(config["min_isoform_fraction_abundance"])),
+    min_jnc = "min_jnc_\\d$",
+    #.join(param_list(config["min_junction_reads"])),
+    min_cov = "min_cov_\\d$"
+    #.join(param_list(config["min_txipt_coverage"]))
 
 rule all:
     input:
-        expand(os.path.join(SALMON_SUBDIR, "quant", "{sample}","quant.sf"), sample=SAMPLES),
-        expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.assembled.gtf"), sample=SAMPLES),
-        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged.combined.gtf"),
-        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.novel.combined.gtf")
+        expand(os.path.join(SALMON_SUBDIR, "quant", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}","quant.sf"),
+               sample=SAMPLES,
+               min_jnc=min_jnc_vals,
+               min_frac=min_frac_vals,
+               min_cov=min_cov_vals
+               ),
+        expand(os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}.intron_chain_filtered.assembled.gtf"),                sample=SAMPLES,
+               min_jnc=min_jnc_vals,
+               min_frac=min_frac_vals,
+               min_cov=min_cov_vals
+               ),
+        expand(os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "all_samples.intron_chain_filtered.novel.combined.gtf"),
+               min_jnc=min_jnc_vals,
+               min_frac=min_frac_vals,
+               min_cov=min_cov_vals)
 
 
 def get_bam(sample, options, output_dir):
@@ -62,10 +98,23 @@ def get_bam(sample, options, output_dir):
     else:
         raise ValueError("{} is invalid value for 'pre_stringtie_processing' option - please use 'none'".format(config["pre_stringtie_processing"]))
 
-    # if options[sample]["realign"] == 0 and options[sample]["file_type"] == "bam":
-    #
-    #     return options[sample]["path"]
-    #
-    # else:
-    #
-    #     return os.path.join(output_dir, config["bam_outdir_name"], sample + ".Aligned.sortedByCoord.out.bam")
+
+
+
+
+
+# def get_stringtie_assembled(sample, output_dir):
+#     '''
+#     Return path to target StringTie transcriptome assembly
+#
+#     Want functionality to provide a range of parameter values in same pipeline
+#     and Snakemake's Paramspace docs aren't quite cutting it right now...
+#
+#     If provide a list for given parameter, will perform assembly for each combo of values
+#     min_isoform_fraction_abundance (-f)
+#     min_junction_reads (-j)
+#     min_transcript_coverage (-c) (minimum reads per bp coverage)
+#     To be added: disable_end_trimming (-t), point-features (--ptf)
+#     '''
+#
+#     if isinstance(list(), config["min_isoform_fraction_abundance"]):

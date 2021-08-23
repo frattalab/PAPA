@@ -1,26 +1,26 @@
-wildcard_constraints:
-    sample = "|".join(SAMPLES)
 
 rule stringtie:
     input:
         bam = lambda wildcards: get_bam(wildcards.sample, OPTIONS, OUTPUT_DIR)
 
     output:
-        os.path.join(STRINGTIE_SUBDIR, "{sample}.assembled.gtf")
+        os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}",
+                     "{sample}.assembled.gtf")
 
     params:
         gtf = GTF,
         point_feats = "--ptf " + config["polya_site_point_features"] if config["use_point_features"] else "",
         strandedness = config["strandedness"],
         label = config["label"],
-        min_iso_frac = config["min_isoform_fraction_abundance"],
+        min_iso_frac = "{min_frac}",
         min_iso_len = config["min_isoform_length"],
         gene_abund = lambda wildcards: " ".join(["-A", os.path.join(STRINGTIE_SUBDIR, wildcards.sample + config["gene_abundances_suffix"])]) if config["report_gene_abundances"] else "",
         annot_tr = lambda wildcards: " ".join(["-C", os.path.join(STRINGTIE_SUBDIR, wildcards.sample + config["covered_txipts_suffix"])]) if config["report_covered_annot_txipts"] else "",
         min_jnc_ohang = config["min_junction_overhang"],
-        min_jnc_reads = config["min_junction_reads"],
+        min_jnc_reads = "{min_jnc}",
         trimming = "-t" if config["disable_end_trimming"] else "",
-        min_cov = config["min_txipt_coverage"],
+        min_cov = "{min_cov}",
         min_se_cov = config["min_single_exon_coverage"],
         conservative = "--conservative" if config["conservative_mode"] else "",
         min_locus_gap = config["min_locus_gap"],
@@ -80,23 +80,27 @@ rule intron_chain_filter:
     Filter novel transcripts for those with matching intron chains to reference transcripts up until their penultimate introns (i.e. novel last exons)
     """
     input:
-        os.path.join(STRINGTIE_SUBDIR, "{sample}.assembled.gtf")
+        os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}",
+                     "{sample}.assembled.gtf")
 
     output:
-        os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.assembled.gtf")
+        os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}",
+                     "{sample}.intron_chain_filtered.assembled.gtf")
 
     params:
         script = "scripts/filter_tx_by_intron_chain.py",
         ref_gtf = GTF,
         match_by = config["intron_chain_filter_mode"],
         max_terminal_non_match = config["max_terminal_non_match"],
-        out_prefix = os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.assembled")
+        out_prefix = os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}.intron_chain_filtered.assembled")
 
     conda:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "{sample}.intron_chain_filter.log")
+        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}.intron_chain_filter.log")
 
     resources:
         threads = config["intron_chain_filter_threads"]
@@ -116,9 +120,21 @@ rule intron_chain_filter:
 
 rule compose_gtf_list_stringtie:
     input:
-        expand(os.path.join(STRINGTIE_SUBDIR, "{sample}.intron_chain_filtered.assembled.gtf"), sample = SAMPLES)
+        lambda wildcards: expand(os.path.join(STRINGTIE_SUBDIR,
+                                              "min_jnc_" + wildcards.min_jnc,
+                                              "min_frac_" + wildcards.min_frac,
+                                              "min_cov_" + wildcards.min_cov,
+                                              "{sample}.intron_chain_filtered.assembled.gtf"
+                                              ),
+                                 sample=SAMPLES)
+        #
+        # expand(os.path.join(STRINGTIE_SUBDIR, "{{min_jnc}}_{{min_frac}}_{{min_cov}}", "{sample}.intron_chain_filtered.assembled.gtf"),
+        #        sample=SAMPLES,
+        #        min_jnc=min_jnc_vals,
+        #        min_frac=min_frac_vals,
+        #        min_cov=min_cov_vals)
     output:
-        txt = os.path.join(STRINGTIE_SUBDIR,"gtf_list.txt")
+        txt = os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}_min_frac_{min_frac}_min_cov_{min_cov}_gtf_list.txt")
     run:
         with open(output.txt, 'w') as out:
             print(*input, sep="\n", file=out)
@@ -130,20 +146,20 @@ rule gtf_merge_novel:
     This set does not include any reference transcripts
     '''
     input:
-        os.path.join(STRINGTIE_SUBDIR, "gtf_list.txt")
+        os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}_min_frac_{min_frac}_min_cov_{min_cov}_gtf_list.txt")
 
     output:
-        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.novel.combined.gtf")
+        os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "all_samples.intron_chain_filtered.novel.combined.gtf")
 
     params:
-        out_prefix = os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.novel"),
+        out_prefix = os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "all_samples.intron_chain_filtered.novel"),
         label = config["label"]
 
     conda:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "stringtie_merge_novel.log")
+        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "stringtie_merge_novel.log")
 
     shell:
         """
@@ -161,21 +177,21 @@ rule gtf_merge_ref:
     Into a single GTF file of non-redundant annotated & novel transcripts
     '''
     input:
-        os.path.join(STRINGTIE_SUBDIR, "gtf_list.txt")
+        os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}_min_frac_{min_frac}_min_cov_{min_cov}_gtf_list.txt")
 
     output:
-        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged.combined.gtf")
+        os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "all_samples.intron_chain_filtered.ref_merged.combined.gtf")
 
     params:
         gtf = GTF,
-        out_prefix = os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged"),
+        out_prefix = os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "all_samples.intron_chain_filtered.ref_merged"),
         label = config["label"]
 
     conda:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "stringtie_merge_novel.log")
+        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "stringtie_merge_novel.log")
 
     shell:
         """

@@ -6,16 +6,16 @@ rule custom_txome_fasta:
     For use with Salmon
     '''
     input:
-        os.path.join(STRINGTIE_SUBDIR, "all_samples.intron_chain_filtered.ref_merged.combined.gtf")
+        os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "all_samples.intron_chain_filtered.ref_merged.combined.gtf")
 
     output:
-        os.path.join(SALMON_SUBDIR, "papa.transcripts.fa")
+        os.path.join(SALMON_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "papa.transcripts.fa")
 
     params:
         genome_fa = config["genome_fasta"]
 
     log:
-        os.path.join(LOG_SUBDIR, "custom_txome_fasta.gffread.log")
+        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "custom_txome_fasta.gffread.log")
 
     conda:
         "../envs/papa.yaml"
@@ -36,13 +36,13 @@ rule generate_full_decoys:
     '''
     input:
         genome_fa = config["genome_fasta"],
-        txome_fa = os.path.join(SALMON_SUBDIR, "papa.transcripts.fa"),
+        txome_fa = os.path.join(SALMON_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}","papa.transcripts.fa"),
     output:
-        gentrome_fa = os.path.join(SALMON_SUBDIR, "gentrome.fa"),
-        decoys = os.path.join(SALMON_SUBDIR, "decoys.txt")
+        gentrome_fa = os.path.join(SALMON_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "gentrome.fa"),
+        decoys = os.path.join(SALMON_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "decoys.txt")
 
     log:
-        os.path.join(LOG_SUBDIR, "generate_full_decoys.log")
+        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "generate_full_decoys.log")
 
     shell:
         """
@@ -52,18 +52,19 @@ rule generate_full_decoys:
         2> {log}
         """
 
+
 rule salmon_index:
     input:
-        gentrome_fa = os.path.join(SALMON_SUBDIR, "gentrome.fa"),
-        decoys = os.path.join(SALMON_SUBDIR, "decoys.txt")
+        gentrome_fa = os.path.join(SALMON_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "gentrome.fa"),
+        decoys = os.path.join(SALMON_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "decoys.txt")
 
     output:
-        os.path.join(SALMON_SUBDIR, "index", "seq.bin"),
-        os.path.join(SALMON_SUBDIR, "index", "pos.bin")
+        os.path.join(SALMON_SUBDIR, "index", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "seq.bin"),
+        os.path.join(SALMON_SUBDIR, "index", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "pos.bin")
 
     params:
         k = config["salmon_kmer_size"],
-        outdir = os.path.join(SALMON_SUBDIR, "index","")
+        outdir = os.path.join(SALMON_SUBDIR, "index", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "")
 
     threads:
         config["salmon_index_threads"]
@@ -72,7 +73,7 @@ rule salmon_index:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "salmon_index.log")
+        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "salmon_index.log")
 
     shell:
         """
@@ -90,14 +91,14 @@ rule salmon_quant_pe:
     input:
         fast1 = lambda wildcards: OPTIONS[wildcards.sample]["fastq1"],
         fast2 = lambda wildcards: OPTIONS[wildcards.sample]["fastq2"],
-        index = os.path.join(SALMON_SUBDIR, "index", "seq.bin")
+        index = os.path.join(SALMON_SUBDIR, "index", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "seq.bin")
 
     output:
-        os.path.join(SALMON_SUBDIR, "quant", "{sample}", "quant.sf")
+        os.path.join(SALMON_SUBDIR, "quant", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}", "quant.sf")
 
     params:
         index_dir = os.path.join(SALMON_SUBDIR, "index",),
-        output_dir = os.path.join(SALMON_SUBDIR, "quant", "{sample}"),
+        output_dir = os.path.join(SALMON_SUBDIR, "quant", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}"),
         libtype = "A"
 
     threads:
@@ -107,7 +108,7 @@ rule salmon_quant_pe:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "salmon_quant_pe.{sample}.log")
+        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "salmon_quant_pe.{sample}.log")
 
     shell:
         """
