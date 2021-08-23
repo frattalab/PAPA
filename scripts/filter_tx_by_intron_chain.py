@@ -1221,7 +1221,7 @@ def annotate_distal_last_exons(novel_last_introns=None,
 
 
 def annotate_internal_spliced(novel_last_exons=None,
-                              ref_internal_introns=None,
+                              ref_introns=None,
                               ref_exons=None,
                               chain_match_info=None,
                               class_col="isoform_class",
@@ -1241,6 +1241,12 @@ def annotate_internal_spliced(novel_last_exons=None,
     novel_last_exons_nc = novel_last_exons.subset(lambda df: df["transcript_id"].isin(valid_nc_ids), nb_cpu=nb_cpu)
 
     # Find unclassified valid events completely contained within annotated introns
+    ref_internal_introns = get_internal_regions(ref_introns,
+                                                feature_col="Feature",
+                                                feature_key="intron",
+                                                id_col="transcript_id",
+                                                region_number_col="intron_number")
+
     int_spliced = novel_last_exons_nc.overlap(ref_internal_introns,
                                                strandedness="same",
                                                how="containment")
