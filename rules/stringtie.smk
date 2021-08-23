@@ -30,7 +30,7 @@ rule stringtie:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "{sample}.stringtie_assemble.log")
+        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}" "{sample}.stringtie_assemble.log")
 
     shell:
         """
