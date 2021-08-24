@@ -195,43 +195,15 @@ def _agg_validate_matching_chain(df, max_terminal_non_match=1, colnames=["match_
                             )
 
 
-
-def stie_groupby_last_exon(df, exon_n_col, which="last"):
-    '''
-    '''
-
-    if (df["Strand"] == "+").all():
-        if which == "last":
-            return df[exon_n_col].idxmax()
-        elif which == "first":
-            return df[exon_n_col].idxmin()
-
-    elif (df["Strand"] == "-").all():
-        if which == "last":
-            return df[exon_n_col].idxmin()
-        elif which == "first":
-            return df[exon_n_col].idxmax()
-
-
-def filter_multi_exon(df, exon_n_col):
-    '''
-    Want transcripts with > 1 exon
-    '''
-    if df[exon_n_col].nunique() > 1:
-        return True
-    else:
-        return False
-
-
 def get_terminal_regions(gr,
-                   feature_col = "Feature",
-                   feature_key = "exon",
-                   id_col = "transcript_id",
-                   region_number_col = "exon_number",
-                   source = None,
-                   which_region="last",
-                   filter_single = False,
-                   nb_cpu = 1):
+                         feature_col = "Feature",
+                         feature_key = "exon",
+                         id_col = "transcript_id",
+                         region_number_col = "exon_number",
+                         source = None,
+                         which_region="last",
+                         filter_single = False,
+                         nb_cpu = 1):
     '''
     Return gr of last exons for each transcript_id
     In process, region_number_col will be converted to type 'int'
@@ -254,10 +226,26 @@ def get_terminal_regions(gr,
     assert gr.as_df()[feature_col].drop_duplicates().tolist() == [feature_key], "only {} entries should be present in gr".format(feature_key)
 
     # Make sure region_number_col is int
-    mod_gr = (gr.assign(region_number_col,
-                      lambda df: df[region_number_col].astype(float).astype(int),
-                      nb_cpu = nb_cpu)
-             )
+    try:
+        mod_gr = (gr.assign(region_number_col,
+                            lambda df: df[region_number_col].astype(float).astype(int),
+                            nb_cpu=nb_cpu)
+                  )
+    except KeyError:
+        # Currently getting weird KeyError with assign for certain chromosome
+        # Mostly non-std chrom names
+        # No error if do '.<exon_number>' to assign, but this makes inflexible to colname
+        # Also no error if gr -> df assign -> gr
+        eprint("pr.assign returned KeyError. Converting {} to int via pandas df conversion".format(region_number_col))
+
+        mod_gr = gr.as_df()
+        mod_gr[region_number_col] = mod_gr[region_number_col].astype(float).astype(int)
+        mod_gr = pr.PyRanges(mod_gr)
+
+
+    # Make sure gr is sorted by transcript_id & 'region number' (ascending order so 1..n)
+    mod_gr = mod_gr.apply(lambda df: df.sort_values(by=[id_col, region_number_col], ascending=True),
+                              nb_cpu=nb_cpu)
 
 
     # Filter out single-exon transcripts
@@ -265,16 +253,10 @@ def get_terminal_regions(gr,
         eprint("Filtering for multi-exon transcripts...")
         eprint("Before: {}".format(len(set(mod_gr.as_df()[id_col].tolist()))))
 
-        mod_gr = (mod_gr.apply(lambda df: (df.groupby(id_col)
-                                       .filter(lambda x: filter_multi_exon(df, region_number_col))
-                                      )
-                           ,
-                           nb_cpu=nb_cpu
-                          )
-                 )
+        # Setting to 'False' marks all duplicates as True (so keep these)
+        mod_gr = mod_gr.subset(lambda df: df.duplicated(subset=[id_col], keep=False), nb_cpu=nb_cpu)
+
         eprint("After: {}".format(len(set(mod_gr.as_df()[id_col].tolist()))))
-
-
 
 
     if source is None:
@@ -282,21 +264,44 @@ def get_terminal_regions(gr,
         # Pick last region entry by max region number for each transcript (id_col)
         # Pick first region entry by min region number for each transcript (id_col)
 
-        if which_region == "last":
-            out_gr = mod_gr.apply(lambda df: df.iloc[df.groupby(id_col)[region_number_col].idxmax(),], nb_cpu = nb_cpu)
+        # keep="last" sets last in ID to 'False' and all others true (negate to keep last only)
+        # keep="first" sets first in ID to 'False'
 
-        elif which_region == "first":
-            out_gr = mod_gr.apply(lambda df: df.iloc[df.groupby(id_col)[region_number_col].idxmin(),], nb_cpu = nb_cpu)
+        out_gr = mod_gr.subset(lambda df: ~(df.duplicated(subset=[id_col], keep=which_region)),
+                               nb_cpu=nb_cpu
+                              )
+
 
     elif source == "stringtie":
-        # Numbering Doesn't respect strand - pick min if Minus strand, max if plus strand
-        out_gr = (mod_gr.apply(lambda df: df.iloc[(df.groupby(id_col)
-                                                  .apply(lambda df: stie_groupby_last_exon(df, region_number_col, which_region)
-                                                        )
-                                                 ),],
-                               nb_cpu = nb_cpu
-                              )
-                 )
+        # Numbering Doesn't respect strand
+        # Need to flip selecting first/last in group depending on strand
+        # minus strand - pick min if Minus strand, max if plus strand
+
+        if which_region == "first":
+            # + strand - pick first in group, - strand - pick last in group
+
+            out_gr = (mod_gr.subset(lambda df:
+                                    #1. plus strand & first in group/ID
+                                    (df["Strand"] == "+") & ~(df.duplicated(subset=[id_col],
+                                                                            keep="first")) |
+                                    #2. minus strand & last in group/ID
+                                    (df["Strand"] == "-") & ~(df.duplicated(subset=[id_col],
+                                                                            keep="last")),
+                                    nb_cpu=nb_cpu)
+                     )
+
+        elif which_region == "last":
+            # + strand - pick last in group/ID
+            # - strand - pick first in group/ID
+            out_gr = (mod_gr.subset(lambda df:
+                                    #1. plus strand & last in group/ID
+                                    (df["Strand"] == "+") & ~(df.duplicated(subset=[id_col],
+                                                                            keep="last")) |
+                                    #2. minus strand & first in group/ID
+                                    (df["Strand"] == "-") & ~(df.duplicated(subset=[id_col],
+                                                                            keep="first")),
+                                    nb_cpu=nb_cpu)
+                     )
 
 
     return out_gr
@@ -1248,8 +1253,8 @@ def annotate_internal_spliced(novel_last_exons=None,
                                                 region_number_col="intron_number")
 
     int_spliced = novel_last_exons_nc.overlap(ref_internal_introns,
-                                               strandedness="same",
-                                               how="containment")
+                                              strandedness="same",
+                                              how="containment")
 
     int_spliced_pre = set(int_spliced.as_df()["transcript_id"].tolist())
 
