@@ -1525,9 +1525,9 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
 
     # Have made all specific classifications and filtered where possible
     # Remaining valid isoforms likely have complex structures
-    ui3_bl_utr_valid_matches["match_class"] = np.where((ui3_bl_utr_valid_matches["match_class"] == "valid") &
+    ui3_bl_utr_valid_matches["isoform_class"] = np.where((ui3_bl_utr_valid_matches["match_class"] == "valid") &
                                                        (pd.isna(ui3_bl_utr_valid_matches["isoform_class"])),
-                                                        "other", np.nan)
+                                                        "other", ui3_bl_utr_valid_matches["isoform_class"])
 
 
     if isinstance(ui3_bl_utr_valid_matches, pd.Series):
