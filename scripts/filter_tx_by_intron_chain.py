@@ -203,7 +203,7 @@ def get_terminal_regions(gr,
                          source = None,
                          which_region="last",
                          filter_single = False,
-                         nb_cpu = 1):
+                         ):
     '''
     Return gr of last exons for each transcript_id
     In process, region_number_col will be converted to type 'int'
@@ -229,7 +229,7 @@ def get_terminal_regions(gr,
     try:
         mod_gr = (gr.assign(region_number_col,
                             lambda df: df[region_number_col].astype(float).astype(int),
-                            nb_cpu=nb_cpu)
+                            nb_cpu=1)
                   )
     except KeyError:
         # Currently getting weird KeyError with assign for certain chromosome
@@ -245,7 +245,7 @@ def get_terminal_regions(gr,
 
     # Make sure gr is sorted by transcript_id & 'region number' (ascending order so 1..n)
     mod_gr = mod_gr.apply(lambda df: df.sort_values(by=[id_col, region_number_col], ascending=True),
-                              nb_cpu=nb_cpu)
+                          nb_cpu=1)
 
 
     # Filter out single-exon transcripts
@@ -254,7 +254,7 @@ def get_terminal_regions(gr,
         eprint("Before: {}".format(len(set(mod_gr.as_df()[id_col].tolist()))))
 
         # Setting to 'False' marks all duplicates as True (so keep these)
-        mod_gr = mod_gr.subset(lambda df: df.duplicated(subset=[id_col], keep=False), nb_cpu=nb_cpu)
+        mod_gr = mod_gr.subset(lambda df: df.duplicated(subset=[id_col], keep=False), nb_cpu=1)
 
         eprint("After: {}".format(len(set(mod_gr.as_df()[id_col].tolist()))))
 
@@ -268,7 +268,7 @@ def get_terminal_regions(gr,
         # keep="first" sets first in ID to 'False'
 
         out_gr = mod_gr.subset(lambda df: ~(df.duplicated(subset=[id_col], keep=which_region)),
-                               nb_cpu=nb_cpu
+                               nb_cpu=1
                               )
 
 
@@ -287,7 +287,7 @@ def get_terminal_regions(gr,
                                     #2. minus strand & last in group/ID
                                     (df["Strand"] == "-") & ~(df.duplicated(subset=[id_col],
                                                                             keep="last")),
-                                    nb_cpu=nb_cpu)
+                                    nb_cpu=1)
                      )
 
         elif which_region == "last":
@@ -300,7 +300,7 @@ def get_terminal_regions(gr,
                                     #2. minus strand & first in group/ID
                                     (df["Strand"] == "-") & ~(df.duplicated(subset=[id_col],
                                                                             keep="first")),
-                                    nb_cpu=nb_cpu)
+                                    nb_cpu=1)
                      )
 
 
