@@ -1348,15 +1348,15 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
                                              region_number_col="exon_number",
                                              source=novel_source,
                                              filter_single=True,
-                                             which_region="first",
-                                             nb_cpu=nb_cpu)
+                                             which_region="first"
+                                             )
 
     novel_last_exons = get_terminal_regions(novel_exons,
-                                             region_number_col="exon_number",
-                                             source=novel_source,
-                                             filter_single=True,
-                                             which_region="last",
-                                             nb_cpu=nb_cpu)
+                                            region_number_col="exon_number",
+                                            source=novel_source,
+                                            filter_single=True,
+                                            which_region="last"
+                                            )
 
     e3 = timer()
     eprint("extracting input first and last exons - took {} s".format(e3 - s3))
@@ -1377,15 +1377,15 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
                                               region_number_col="exon_number",
                                               source=None,
                                               filter_single=True,
-                                              which_region="first",
-                                              nb_cpu=nb_cpu)
+                                              which_region="first"
+                                              )
 
     ref_pc_last_exons = get_terminal_regions(ref_pc_exons,
-                                              region_number_col="exon_number",
-                                              source=None,
-                                              filter_single=True,
-                                              which_region="last",
-                                              nb_cpu=nb_cpu)
+                                             region_number_col="exon_number",
+                                             source=None,
+                                             filter_single=True,
+                                             which_region="last"
+                                             )
 
     e4 = timer()
     eprint("extracting reference first and last exons - took {} s".format(e4 - s4))
@@ -1447,16 +1447,16 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
                                                 feature_key="intron",
                                                 source=None,
                                                 filter_single=True,
-                                                which_region="first",
-                                                nb_cpu=nb_cpu)
+                                                which_region="first"
+                                                )
 
     novel_last_introns = get_terminal_regions(novel_introns,
                                               region_number_col="intron_number",
                                               feature_key="intron",
                                               source=None,
                                               filter_single=True,
-                                              which_region="last",
-                                              nb_cpu=nb_cpu)
+                                              which_region="last"
+                                              )
 
     e5 = timer()
     eprint("extracting reference first and novel last introns - took {} s".format(e5 - s5))
