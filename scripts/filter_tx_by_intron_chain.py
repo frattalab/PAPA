@@ -447,7 +447,10 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
     # Have to convert Starts and Ends to np.int64 to prevent left-join error
     # https://github.com/biocore-ntnu/pyranges/issues/170
     # TO DO: re-report
-    joined = pr.PyRanges(novel_introns.as_df(), int64=True).join(pr.PyRanges(ref_introns.as_df(), int64=True), strandedness="same", suffix ="_ref", nb_cpu=nb_cpu)
+    novel_introns = novel_introns.assign("Start", lambda df: df.Start.astype("int64")).assign("End", lambda df: df.End.astype("int64"))
+    ref_introns = ref_introns.assign("Start", lambda df: df.Start.astype("int64")).assign("End", lambda df: df.End.astype("int64"))
+    
+    joined = novel_introns.join(ref_introns, strandedness="same", suffix ="_ref", nb_cpu=nb_cpu)
 
     t8 = timer()
 
@@ -659,13 +662,15 @@ def filter_first_intron_tx(novel_first_exons,
 
     #2.3 - find last exons of non-matched txs completely contained within annotated first introns
     eprint("finding novel last exons completely contained within annotated first introns...")
+    novel_last_exons_nm = novel_last_exons_nm.assign("Start", lambda df: df.Start.astype("int64")).assign("End", lambda df: df.End.astype("int64"))
+    ref_first_introns = ref_first_introns.assign("Start", lambda df: df.Start.astype("int64")).assign("End", lambda df: df.End.astype("int64"))
 
     s4 = timer()
-    novel_nm_fi = pr.PyRanges(novel_last_exons_nm.as_df(), int64=True).overlap(pr.PyRanges(ref_first_introns.as_df(), int64=True),
-                                                                               how="containment",
-                                                                               strandedness="same",
-                                                                               #nb_cpu=nb_cpu
-                                                                               )
+
+    novel_nm_fi = novel_last_exons_nm.overlap(ref_first_introns,
+                                              how="containment",
+                                              strandedness="same")
+
     e4 = timer()
     eprint("took {} s".format(e4 - s4))
 
@@ -676,6 +681,7 @@ def filter_first_intron_tx(novel_first_exons,
         n_tr = len(tr_ids)
 
     except AssertionError:
+        # empty PyRanges so transcript_id column not present
         tr_ids = set()
         n_tr = 0
 
