@@ -144,7 +144,7 @@ def validate_matching_chain(df, max_terminal_non_match=1):
         return False
 
 
-def _agg_validate_matching_chain(df, max_terminal_non_match=1, colnames=["match_class", "n_terminal_non_match"]):
+def _agg_validate_matching_chain(df, max_terminal_non_match=1, colnames=["match_class", "n_terminal_non_match", "runs", "starts", "vals"]):
     '''
     Internal function on grouped dataframe containing all matches for each of its introns
     Returns a summarised df of tx_id | match_class | n_terminal_non_match
@@ -167,7 +167,10 @@ def _agg_validate_matching_chain(df, max_terminal_non_match=1, colnames=["match_
     if np.all(vals):
         # All introns match (e.g. bleedthrough event, 3'UTR extension (and any reassembled reference transcripts))
         return pd.DataFrame({colnames[0]: ["valid"],
-                             colnames[1]: [0]
+                             colnames[1]: [0],
+                             colnames[2]: ":".join(runs.astype(str)),
+                             colnames[3]: ":".join(starts.astype(str)),
+                             colnames[4]: ":".join(vals.astype(str))
                              }
                             )
 
@@ -176,21 +179,30 @@ def _agg_validate_matching_chain(df, max_terminal_non_match=1, colnames=["match_
         if runs[-1] <= max_terminal_non_match:
             # n of 3'end non-matching introns is less than cut-off
             return pd.DataFrame({colnames[0]: ["valid"],
-                                 colnames[1]: [runs[-1]]
+                                 colnames[1]: [runs[-1]],
+                                 colnames[2]: ":".join(runs.astype(str)),
+                                 colnames[3]: ":".join(starts.astype(str)),
+                                 colnames[4]: ":".join(vals.astype(str))
                                  }
                                 )
 
         else:
             # Too many unmatched at 3'end
             return pd.DataFrame({colnames[0]: ["not_valid"],
-                                 colnames[1]: [runs[-1]]
+                                 colnames[1]: [runs[-1]],
+                                 colnames[2]: ":".join(runs.astype(str)),
+                                 colnames[3]: ":".join(starts.astype(str)),
+                                 colnames[4]: ":".join(vals.astype(str))
                                  }
                                 )
 
     else:
         # No exact match, no match starting at 5'end followed by only non-matched
         return pd.DataFrame({colnames[0]: ["not_valid"],
-                             colnames[1]: [np.nan]
+                             colnames[1]: [np.nan],
+                             colnames[2]: ":".join(runs.astype(str)),
+                             colnames[3]: ":".join(starts.astype(str)),
+                             colnames[4]: ":".join(vals.astype(str))
                              }
                             )
 
@@ -363,6 +375,47 @@ def add_intron_number(introns, id_col = "transcript_id", out_col="intron_number"
     return introns_out
 
 
+def _check_int64(gr):
+    '''
+    Helper function to check if Start & End columns are int64, if not to convert
+    Useful as a safety before pr.join as errors often arise if leave at int32
+    '''
+
+    if gr.dtypes.loc["Start"] != "int64":
+        gr = gr.assign("Start", lambda df: df["Start"].astype("int64"))
+
+    if gr.dtypes.loc["End"] != "int64":
+        gr = gr.assign("End", lambda df: df["End"].astype("int64"))
+
+    return gr
+
+
+def _pd_merge_gr(gr_df, gr_to_merge, how, on, suffixes):
+    '''
+    Perform a pd.merge inside a pr.apply to add columns from gr_to_merge based on metadata in gr_df
+    Here, will check the chromosome and strand of provided gr (gr_df)
+    and subset gr_to_merge to chr/strand before converting to df
+    This should cut down on memory requirements when convert to df (which requires pd.concat() x chrom & strand)
+    For this kind of merge, only expect joins between regions on same chr/strand
+    '''
+    #chromsomes returns a list of chr names (always 1 val)
+    chrom = gr_df.Chromosome.iloc[0]
+
+    try:
+        strand = gr_df.Strand.iloc[0]
+        to_merge = gr_to_merge[chrom, strand].as_df()
+
+    except AttributeError:
+        # gr_df is unstranded, just subset for chr
+        to_merge = gr_to_merge[chrom].as_df()
+
+    return gr_df.merge(to_merge,
+                       how=how,
+                       on=on,
+                       suffixes=suffixes)
+
+
+
 def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transcript", max_terminal_non_match=2, nb_cpu = 1):
     '''
     '''
@@ -415,26 +468,17 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
     # novel_introns, ref_introns
 
     # 3. Store intron_ids for each transcript, sorted by intron_number (where 1 = first intron regardless of strand) in a df/Series
-    eprint("generating df of novel txipts sorted by intron number...")
+    eprint("generating gr of novel txipts sorted by intron number...")
 
     t5 = timer()
 
-
-    novel_intron_ids_ordered = novel_introns.as_df().sort_values(by=["transcript_id", "intron_number"], ascending=True)
-    # novel_intron_ids_ordered = (novel_introns.as_df()
-    #                             .groupby("transcript_id")
-    #                             .sort_values(by=["transcript_id","intron_number"],ascending=True)
-    #                             # .apply(sort_introns_by_strand)
-    #                             .reset_index(drop=True)
-    #                             # .rename({"index": "intron_number"}, axis="columns")
-    #                             )
-    # novel_intron_ids_ordered["intron_number"] = novel_intron_ids_ordered["intron_number"].add(1)
-
-    # df of txipt_id | intron_id | intron_number
-    novel_intron_ids_ordered = novel_intron_ids_ordered.loc[:,["transcript_id","intron_id","intron_number"]]
+    novel_intron_ids_ordered = novel_introns.apply(lambda df: df.sort_values(by=["transcript_id", "intron_number"], ascending=True))
+    # gr of txipt_id | intron_id | intron_number
+    novel_intron_ids_ordered = novel_intron_ids_ordered[["transcript_id","intron_id","intron_number"]]
 
     t6 = timer()
     eprint("took {} s".format(t6 - t5))
+
 #     eprint(novel_intron_ids_ordered.dtypes)
 
 
@@ -449,7 +493,7 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
     # TO DO: re-report
     novel_introns = novel_introns.assign("Start", lambda df: df.Start.astype("int64")).assign("End", lambda df: df.End.astype("int64"))
     ref_introns = ref_introns.assign("Start", lambda df: df.Start.astype("int64")).assign("End", lambda df: df.End.astype("int64"))
-    
+
     joined = novel_introns.join(ref_introns, strandedness="same", suffix ="_ref", nb_cpu=nb_cpu)
 
     t8 = timer()
@@ -466,7 +510,7 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
     eprint("took {} s".format(t10 - t9))
 
     # Minimal info needed on matches between novel and reference introns
-    joined = joined.as_df()[["transcript_id","intron_id","transcript_id_ref","intron_id_ref","intron_number_ref"]]
+    joined = joined[["transcript_id","intron_id","transcript_id_ref","intron_id_ref","intron_number_ref"]]
 
 #     eprint(joined.dtypes)
 
@@ -478,41 +522,66 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
 
     if match_type == "any":
         # Looking for intron to match any annotated intron, regardless of reference transcript
-        novel_ref_match_info = novel_intron_ids_ordered.merge(joined,
-                                                              how="left",
-                                                              on="intron_id",
-                                                              suffixes=["_novel","_match"]
-                                                             )
 
-        # Assign 'match' column for each intron.
-        # Since we don't really care which intron it matches, & no matches will mean NaN
-        novel_ref_match_info["match"] = novel_ref_match_info["transcript_id_ref"]
-        novel_ref_match_info["match"] = novel_ref_match_info["match"].fillna(0)
-        novel_ref_match_info["match"] = novel_ref_match_info["match"].replace("\w*", 1, regex=True)
+        # i) Make a gr joining matched novel introns with all novel introns
+        novel_intron_ids_ordered = _check_int64(novel_intron_ids_ordered)
+        joined = _check_int64(joined)
 
-        # Check that first intron of each novel transcript matches first intron of a reference transcript
+        # Since both contain intron coords, expect novel to overlap with itself (in joined) if 'matched'
+        novel_ref_match_info = novel_intron_ids_ordered.apply(lambda df:
+                                                              _pd_merge_gr(df,
+                                                                           joined,
+                                                                           how="left",
+                                                                           on="intron_id",
+                                                                           suffixes=[None,"_match"]
+                                                                           ),
+                                                              nb_cpu=nb_cpu)
+
+
+        # eprint(novel_ref_match_info)
+
+        # ii) Assign 'match' column for each intron_id
+        # pd.merge puts an NaN in non-overlapping rows (i.e. intron not matched)
+        novel_ref_match_info = novel_ref_match_info.assign("match",
+                                                           lambda df:
+                                                           pd.Series(np.where(np.isnan(df["Start_match"]),
+                                                                              0,
+                                                                              1)
+                                                                     )
+                                                           )
+
+        # iii) check that first intron of each novel transcript matches first intron of a reference transcript
         # Replace 'match' with 0 if novel first intron doesn't match ref first intron
-        # eprint("novel_ref_match_info colnames - {}".format(novel_ref_match_info.columns))
 
-        novel_ref_match_info["match"] = np.where((novel_ref_match_info["intron_number"] == 1) &
-                                                 (novel_ref_match_info["intron_number_ref"] != 1),
-                                                 0,
-                                                 novel_ref_match_info["match"])
+        novel_ref_match_info = novel_ref_match_info.assign("match",
+                                                           lambda df: pd.Series(np.where(
+                                                                                         (df["intron_number"] == 1) &
+                                                                                         (df["intron_number_ref"] != 1),
+                                                                                         0,
+                                                                                         df["match"])))
 
-        # Make an ordered categorical column describing whether match is to first or other intron
-        novel_ref_match_info["match"] = (novel_ref_match_info["match"].astype("category")
-                                                                      .cat
-                                                                      .set_categories([1,0], ordered=True)
-                                         )
+        # iv) Make 'match' an ordered categorical column describing whether match is to first or other intron
+        # With priority to a match over not match
+        novel_ref_match_info = novel_ref_match_info.assign("match",
+                                                           lambda df:
+                                                           df["match"].astype("category")
+                                                           .cat
+                                                           .set_categories([1,0], ordered=True)
+                                                           )
 
         # Now when drop duplicates a match is prioritised over no matches
-        novel_ref_match_info = (novel_ref_match_info.sort_values(["transcript_id_novel","intron_number", "match"])
-                                                    .drop_duplicates(subset=["intron_id","match"],
-                                                                     keep="first")
-                                )
+        novel_ref_match_info = novel_ref_match_info.apply(lambda df:
+                                                          df.sort_values(["transcript_id",
+                                                                          "intron_number",
+                                                                          "match"])
+                                                          .drop_duplicates(subset=["intron_id","match"],
+                                                                           keep="first"),
+                                                          nb_cpu=nb_cpu
+                                                          )
 
-        # Minimal informative info is novel tx, novel intron_id & number, match column
-        novel_ref_match_info = novel_ref_match_info[["transcript_id_novel","intron_id","intron_number","match"]]
+        # Subset to minimal required metadata for chain_match checking
+        novel_ref_match_info = novel_ref_match_info.apply(lambda df: df.rename(columns={"transcript_id": "transcript_id_novel"}))
+        novel_ref_match_info = novel_ref_match_info[["transcript_id_novel", "intron_id", "intron_number", "match"]]
 
 
     elif match_type == "transcript":
@@ -558,13 +627,19 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
         #                                     )
         #                             )
 
-        novel_ref_match_info_agg = (novel_ref_match_info.groupby("transcript_id_novel")
-                                    .apply(lambda df: _agg_validate_matching_chain(df,
-                                                                                   max_terminal_non_match)
-                                           )
-                                    .reset_index("transcript_id_novel") # return to a column
-                                    .reset_index(drop=True) # drops weird 0 0 0 index made by my function... (To do: work out why)
+        novel_ref_match_info_agg = (novel_ref_match_info.apply(lambda df:
+                                                               (df.groupby("transcript_id_novel")
+                                                                 .apply(lambda df: _agg_validate_matching_chain(df,
+                                                                                                                max_terminal_non_match))
+                                                                 # return to a column
+                                                                 .reset_index("transcript_id_novel")
+                                                                 # drops weird 0 0 0 index made by my function... (To do: work out why)
+                                                                 .reset_index(drop=True)
+                                                                 ),
+                                                                as_pyranges=False, # Summarises by Tx and drops coord info
+                                                                nb_cpu=nb_cpu)
                                     )
+
 
     # elif match_type == "transcript":
     #     # Check novel tx vs each ref tx
@@ -575,6 +650,13 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
 
     t14 = timer()
     eprint("took {} s".format(t14 - t13))
+
+    # Now turn into single pandas df (1 row per novel txipt)
+    # Ignore_index to drop the PyRanges chrom/strand keys as not needed
+    novel_ref_match_info_agg = pd.concat(novel_ref_match_info_agg,
+                                         ignore_index=True)
+
+    # eprint(novel_ref_match_info_agg)
 
 
     return novel_ref_match_info_agg
