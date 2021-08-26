@@ -409,10 +409,17 @@ def _pd_merge_gr(gr_df, gr_to_merge, how, on, suffixes):
         # gr_df is unstranded, just subset for chr
         to_merge = gr_to_merge[chrom].as_df()
 
-    return gr_df.merge(to_merge,
-                       how=how,
-                       on=on,
-                       suffixes=suffixes)
+    if to_merge.empty:
+        return gr_df
+
+    else:
+        assert on in gr_df.columns
+        assert on in to_merge.columns
+
+        return gr_df.merge(to_merge,
+                           how=how,
+                           on=on,
+                           suffixes=suffixes)
 
 
 
