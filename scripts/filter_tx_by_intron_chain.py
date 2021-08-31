@@ -390,7 +390,7 @@ def _check_int64(gr):
     return gr
 
 
-def _pd_merge_gr(gr_df, gr_to_merge, how, on, suffixes):
+def _pd_merge_gr(df, df_to_merge, how, on, suffixes, to_merge_cols):
     '''
     Perform a pd.merge inside a pr.apply to add columns from gr_to_merge based on metadata in gr_df
     Here, will check the chromosome and strand of provided gr (gr_df)
@@ -399,28 +399,40 @@ def _pd_merge_gr(gr_df, gr_to_merge, how, on, suffixes):
     For this kind of merge, only expect joins between regions on same chr/strand
     '''
     #chromsomes returns a list of chr names (always 1 val)
-    chrom = gr_df.Chromosome.iloc[0]
+    assert isinstance(to_merge_cols, list)
 
-    try:
-        strand = gr_df.Strand.iloc[0]
-        to_merge = gr_to_merge[chrom, strand].as_df()
+    if df_to_merge.empty:
+        eprint("df_to_merge for chr/strand pair {} is empty - returning to_merge cols filled with NaNs".format(",".join([df.Chromosome.iloc[0], df.Strand.iloc[0]])))
 
-    except AttributeError:
-        # gr_df is unstranded, just subset for chr
-        to_merge = gr_to_merge[chrom].as_df()
+        df_cols = df.columns.tolist()
+        # on won't have suffix added - need to remove as a target column
+        to_merge_cols = [col for col in to_merge_cols if col != on]
 
-    if to_merge.empty:
-        return gr_df
+        # eprint(df_cols)
+        # eprint(to_merge_cols)
+
+        # list of cols shared between dfs - need to add suffixes[1]
+        # list of cols only in df_to_merge - these stay the same in a merge
+        only_cols = [col for col in to_merge_cols if col not in df_cols]
+        shared_cols = [col for col in to_merge_cols if col in df_cols]
+
+        # eprint("only_cols - {}".format(only_cols))
+        # eprint("shared_cols - {}".format(shared_cols))
+
+        out_shared = [col + suffixes[1] for col in shared_cols]
+        target_cols = out_shared + only_cols
+
+        nrows = len(df.index)
+
+        out_cols = {col: pd.Series([np.nan]*nrows) for col in target_cols}
+
+        return df.assign(**out_cols)
 
     else:
-        assert on in gr_df.columns
-        assert on in to_merge.columns
-
-        return gr_df.merge(to_merge,
-                           how=how,
-                           on=on,
-                           suffixes=suffixes)
-
+        return df.merge(df_to_merge,
+                        how=how,
+                        on=on,
+                        suffixes=suffixes)
 
 
 def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transcript", max_terminal_non_match=2, nb_cpu = 1):
@@ -531,21 +543,30 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
         # Looking for intron to match any annotated intron, regardless of reference transcript
 
         # i) Make a gr joining matched novel introns with all novel introns
-        novel_intron_ids_ordered = _check_int64(novel_intron_ids_ordered)
-        joined = _check_int64(joined)
 
-        # Since both contain intron coords, expect novel to overlap with itself (in joined) if 'matched'
-        novel_ref_match_info = novel_intron_ids_ordered.apply(lambda df:
-                                                              _pd_merge_gr(df,
-                                                                           joined,
-                                                                           how="left",
-                                                                           on="intron_id",
-                                                                           suffixes=[None,"_match"]
-                                                                           ),
-                                                              nb_cpu=nb_cpu)
+        # If a chrom/strand pair has no matches (i.e. is an empty df)
+        # pd.merge will not produce output,
+        # and dfs in PyRanges object will be incompatible as don't have matching columns
+        # Use this as set of cols to expect if matched_df (joined) is empty
+        joined_cols = joined.columns.tolist()
 
+        novel_ref_match_info = novel_intron_ids_ordered.apply_pair(joined,
+                                                                   lambda all_novel, matched_novel:
+                                                                   _pd_merge_gr(all_novel,
+                                                                                matched_novel,
+                                                                                how="left",
+                                                                                on="intron_id",
+                                                                                suffixes=[None, "_match"],
+                                                                                to_merge_cols=joined_cols),
+                                                                   nb_cpu=nb_cpu
+                                                                   )
 
         # eprint(novel_ref_match_info)
+        #
+        # for chr, df in novel_ref_match_info.items():
+        #     eprint(chr)
+        #     eprint(df.columns)
+        #     eprint(len(df.columns))
 
         # ii) Assign 'match' column for each intron_id
         # pd.merge puts an NaN in non-overlapping rows (i.e. intron not matched)
