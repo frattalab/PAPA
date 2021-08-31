@@ -435,6 +435,39 @@ def _pd_merge_gr(df, df_to_merge, how, on, suffixes, to_merge_cols):
                         suffixes=suffixes)
 
 
+
+def chain_match_by_tx(df, id_col="transcript_id", max_terminal_non_match=1):
+    '''
+    Applied to a pandas df (i.e. use within pyranges.apply())
+    '''
+
+    assert id_col in df.columns
+
+    # Check that df has at least 1 not None id_col value
+    if df.fillna(value=np.nan)[id_col].isna().all():
+        # Will get key error if try to groupby column with all NA/None values
+        return pd.DataFrame()
+
+    else:
+        # Try chain matching
+        try:
+            out_df = (df.groupby(id_col)
+                        .apply(lambda x: _agg_validate_matching_chain(x,
+                                                                      max_terminal_non_match))
+                        # return to a column
+                        .reset_index(id_col)
+                        # drops weird 0 0 0 index made by my function... (To do: work out why)
+                        .reset_index(drop=True)
+                     )
+
+        except KeyError:
+            # sometimes get this... KeyError: 'Requested level (transcript_id_novel) does not match index name (None)'
+            eprint("df returned 'transcript_id_novel' KeyError for chr/strand pair {} - returning empty df".format(",".join([df.Chromosome.iloc[0], df.Strand.iloc[0]])))
+            out_df = pd.DataFrame()
+
+    return out_df
+
+
 def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transcript", max_terminal_non_match=2, nb_cpu = 1):
     '''
     '''
@@ -612,33 +645,33 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
         novel_ref_match_info = novel_ref_match_info[["transcript_id_novel", "intron_id", "intron_number", "match"]]
 
 
-    elif match_type == "transcript":
+    # elif match_type == "transcript":
         # Looking for introns (except last) to match the same reference transcript
         # merge_ordered can do a 'grouped merge' filling in empty rows (introns) for each transcript_id
         # This is especially useful if want to do transcript-specific intron matching
         # For each reference transcript, all novel introns will be filled with NaN if no overlap for given transcript_id
         # (i.e. novel txipt matches all but last intron of reference transcript)
 
-        novel_ref_match_info = (pd.merge_ordered(novel_intron_ids_ordered,
-                                    joined,
-                                    how="left",
-                                    on="intron_id",
-                                    right_by="transcript_id_ref", # group matches by ref tx & join tx by tx
-                                    suffixes=["_novel","_match"],
-                                    fill_method=None)
-                   .sort_values(by=["transcript_id_novel","intron_number"])
-                               )
-
-        # merge_ordered fills rows for each intron for each ref tx in df, regardless of whether any overlap
-        # .dropna(axis="rows", subset=["intron_id_ref"])
-        novel_ref_match_info = (novel_ref_match_info.groupby(["transcript_id_novel", "transcript_id_ref"])
-                                .filter(lambda df: (df["intron_id_ref"].notna()).any()) # Retained if ref tx has >=1 matching introns
-                                .reset_index(drop=True))
-
-        # Make a match column where 1 = match, 0 = no match for each ref id and novel intron
-        novel_ref_match_info["match"] = novel_ref_match_info["intron_id_ref"]
-        novel_ref_match_info["match"] = novel_ref_match_info["match"].fillna(0)
-        novel_ref_match_info["match"] = novel_ref_match_info["match"].replace("\w*", 1, regex=True)
+        # novel_ref_match_info = (pd.merge_ordered(novel_intron_ids_ordered,
+        #                             joined,
+        #                             how="left",
+        #                             on="intron_id",
+        #                             right_by="transcript_id_ref", # group matches by ref tx & join tx by tx
+        #                             suffixes=["_novel","_match"],
+        #                             fill_method=None)
+        #            .sort_values(by=["transcript_id_novel","intron_number"])
+        #                        )
+        #
+        # # merge_ordered fills rows for each intron for each ref tx in df, regardless of whether any overlap
+        # # .dropna(axis="rows", subset=["intron_id_ref"])
+        # novel_ref_match_info = (novel_ref_match_info.groupby(["transcript_id_novel", "transcript_id_ref"])
+        #                         .filter(lambda df: (df["intron_id_ref"].notna()).any()) # Retained if ref tx has >=1 matching introns
+        #                         .reset_index(drop=True))
+        #
+        # # Make a match column where 1 = match, 0 = no match for each ref id and novel intron
+        # novel_ref_match_info["match"] = novel_ref_match_info["intron_id_ref"]
+        # novel_ref_match_info["match"] = novel_ref_match_info["match"].fillna(0)
+        # novel_ref_match_info["match"] = novel_ref_match_info["match"].replace("\w*", 1, regex=True)
 
     t12 = timer()
     eprint("took {} s".format(t12 - t11))
@@ -654,18 +687,19 @@ def filter_transcripts_by_chain(novel_introns, ref_introns, match_type = "transc
         #                              .filter(lambda x: validate_matching_chain(x, max_terminal_non_match)
         #                                     )
         #                             )
+        # for chrom, df in novel_ref_match_info:
+        #     eprint(chrom)
+        #     eprint(df.columns)
+        #     eprint("Empty df - {}".format(df.empty))
+        #     eprint(df["transcript_id_novel"].value_counts(dropna=False))
+        #     eprint(df["transcript_id_novel"].value_counts(dropna=False).loc[lambda x: x.index == None])
 
         novel_ref_match_info_agg = (novel_ref_match_info.apply(lambda df:
-                                                               (df.groupby("transcript_id_novel")
-                                                                 .apply(lambda df: _agg_validate_matching_chain(df,
-                                                                                                                max_terminal_non_match))
-                                                                 # return to a column
-                                                                 .reset_index("transcript_id_novel")
-                                                                 # drops weird 0 0 0 index made by my function... (To do: work out why)
-                                                                 .reset_index(drop=True)
-                                                                 ),
-                                                                as_pyranges=False, # Summarises by Tx and drops coord info
-                                                                nb_cpu=nb_cpu)
+                                                               chain_match_by_tx(df,
+                                                                                 "transcript_id_novel",
+                                                                                 max_terminal_non_match),
+                                                               as_pyranges=False, # Summarises by Tx and drops coord info
+                                                               nb_cpu=nb_cpu)
                                     )
 
 
