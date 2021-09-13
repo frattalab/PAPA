@@ -334,45 +334,48 @@ def check_three_end(gr):
     return all(df.Start == df.End)
 
 
-def _df_add_intron_number(df, out_col):
+def _df_add_region_number(df,id_col):
+    '''
+    Return a Series of strand-aware region numbers (5'-3' in 1..n)
+    Function to be used internally in a pr.assign (mainly by add_region_number)
     '''
 
+    if (df.Strand == "+").all():
+        # Start position smallest to largest = 5'-3'
+
+        return df.groupby(id_col)["Start"].rank(method="min", ascending=True)
+
+    elif (df.Strand == "-").all():
+        # Start position largest to smallest = 5'-3'
+
+        return df.groupby(id_col)["Start"].rank(method="min", ascending=False)
+
+
+def add_region_number(gr,
+                      id_col="transcript_id",
+                      feature_key="intron",
+                      out_col="intron_number",
+                      feature_col="Feature",
+                      nb_cpu=1):
+    '''
+    Adds column to gr containing a strand aware region number column,
+    ordered 5'-3' 1..n by a group of features (e.g. transcript)
     '''
 
-    n_exons = len(df.index)
+    # Make sure only 'feature_key' rows are in the gr
+    assert gr.as_df()[feature_col].drop_duplicates().tolist() == [feature_key], "only {} entries should be present in gr".format(feature_key)
 
-    # Note: (I think) dictionary unpacking is required so out_col can be a variable...
+    # Make sure sorted by position first.
+    gr = gr.sort()
 
-    if (df["Strand"] == "+").all():
-        # first in order by Start position in each txipt = left-most start position (i.e. most 5')
-        return df.assign(**{out_col: list(range(1, n_exons + 1))})
+    # Add in region number column in strand aware manner, so 1 = most 5', n = most 3'
 
-    elif (df["Strand"] == "-").all():
-        # firs in order by Start position in each txipt = most 3' is left-most start position
-        return df.assign(**{out_col: list(range(1, n_exons +1))[::-1]})
+    gr = gr.assign(out_col, lambda df: _df_add_region_number(df, id_col), nb_cpu=nb_cpu)
+
+    return gr
 
 
-def add_intron_number(introns, id_col = "transcript_id", out_col="intron_number", nb_cpu=1):
-    '''
-    '''
 
-    start = timer()
-
-    assert len(set(introns.as_df().Feature.tolist())) == 1, "only one feature type (e.g. all introns, all exons) should be present in gr"
-
-    # Sort by position (could add an nb_cpu here...)
-    introns = introns.sort()
-
-    introns_out = (introns.apply(lambda df:
-                                 df.groupby(id_col)
-                                 .apply(lambda x: _df_add_intron_number(x, out_col)),
-                                 nb_cpu=nb_cpu
-                                 ))
-
-    end = timer()
-    eprint("took {} s".format(end - start))
-
-    return introns_out
 
 
 def _check_int64(gr):
@@ -1574,12 +1577,14 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
 
     eprint("took {} s".format(end1 - start1))
 
-    # Need/want to make sure each introns object has a strand-aware intron number by transcript_id (i.e. 1 = first intron
+    # Need/want to make sure each introns object has a strand-aware intron number by transcript_id (i.e. 1 = first intron)
+    s_in = timer()
+
     try:
         assert "intron_number" in ref_pc_introns.as_df().columns.tolist()
     except AssertionError:
         eprint("adding intron_number column to reference introns object...")
-        ref_pc_introns = add_intron_number(ref_pc_introns, nb_cpu=nb_cpu)
+        ref_pc_introns = add_region_number(ref_pc_introns, nb_cpu=1)
 
 
     try:
@@ -1587,7 +1592,11 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
 
     except AssertionError:
         eprint("adding intron_number column to novel introns object...")
-        novel_introns = add_intron_number(novel_introns, nb_cpu=nb_cpu)
+        novel_introns = add_region_number(novel_introns, nb_cpu=1)
+
+    e_in = timer()
+
+    eprint("Adding intron number columns took {} s".format(e_in - s_in))
 
     eprint("Extracting reference first introns and novel last introns...")
 
