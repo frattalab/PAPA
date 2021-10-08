@@ -1456,10 +1456,12 @@ def annotate_internal_spliced(novel_last_exons=None,
     return chain_match_info
 
 
-def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, novel_source, nb_cpu):
+def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, novel_source, ref_anno_type, nb_cpu):
     '''
     '''
     start = timer()
+
+    assert ref_anno_type in ["gencode", "ensembl"]
 
     eprint("reading in input gtf files, this can take a while...")
     eprint("reading gtf containing novel assembled transcripts...")
@@ -1480,8 +1482,21 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
 
     eprint("extracting protein-coding & lncRNA gene types from reference annotation file...")
 
+    # Define expected name of column/attribute defining the 'gene type'
+    if ref_anno_type == "gencode":
+        gene_type_col = "gene_type"
+
+    elif ref_anno_type == "ensembl":
+        gene_type_col = "gene_biotype"
+
     start2 = timer()
-    ref_pc = ref.subset(lambda df: df["gene_type"].isin(["protein_coding", "lncRNA"]), nb_cpu=nb_cpu)
+
+    if gene_type_col not in ref.columns.tolist():
+        raise ValueError("Expected gene type attribute - {} - is not present in input reference GTF. Is reference source ('-s', '--reference-source') defined correctly?".format(gene_type_col))
+
+    else:
+        ref_pc = ref.subset(lambda df: df[gene_type_col].isin(["protein_coding", "lncRNA"]), nb_cpu=nb_cpu)
+
     end2 = timer()
 
     eprint("took {} s".format(end2 - start2))
@@ -1497,19 +1512,43 @@ def main(novel_path, ref_path, match_by, max_terminal_non_match, out_prefix, nov
     eprint("extracting first and last exons from input GTF file...")
 
     s3 = timer()
-    novel_first_exons = get_terminal_regions(novel_exons,
-                                             region_number_col="exon_number",
-                                             source=novel_source,
-                                             filter_single=True,
-                                             which_region="first"
-                                             )
 
-    novel_last_exons = get_terminal_regions(novel_exons,
-                                            region_number_col="exon_number",
-                                            source=novel_source,
-                                            filter_single=True,
-                                            which_region="last"
-                                            )
+    if "exon_number" not in novel_exons.columns.tolist():
+        eprint("Input GTF file does not contain 'exon' number column. Adding a 'strand-aware' exon number...")
+
+        novel_exons = add_region_number(novel_exons,
+                                        feature_key="exon",
+                                        out_col="exon_number")
+
+        # Now novel_source is irrelevant...
+        novel_first_exons = get_terminal_regions(novel_exons,
+                                                 region_number_col="exon_number",
+                                                 source=None,
+                                                 filter_single=True,
+                                                 which_region="first"
+                                                 )
+
+        novel_last_exons = get_terminal_regions(novel_exons,
+                                                region_number_col="exon_number",
+                                                source=None,
+                                                filter_single=True,
+                                                which_region="last"
+                                                )
+    else:
+        # Already has exon_number column no need to add it...
+        novel_first_exons = get_terminal_regions(novel_exons,
+                                                region_number_col="exon_number",
+                                                source=novel_source,
+                                                filter_single=True,
+                                                which_region="first"
+                                                 )
+
+        novel_last_exons = get_terminal_regions(novel_exons,
+                                                region_number_col="exon_number",
+                                                source=novel_source,
+                                                filter_single=True,
+                                                which_region="last"
+                                                )
 
     e3 = timer()
     eprint("extracting input first and last exons - took {} s".format(e3 - s3))
@@ -1749,11 +1788,12 @@ if __name__ == '__main__':
 
     parser.add_argument("-i", "--input-transcripts", default='', dest="novel_gtf", help = "path to GTF file containing novel transcripts assembled by StringTie.", required=True)
     parser.add_argument("-r", "--reference-transcripts", default='', type=str, dest="ref_gtf", help="path to GTF file containing reference transcripts against which to match intron chains of novel transcripts. Should contain same chromosome naming scheme", required=True)
+    parser.add_argument("-s", "--reference-source", type=str, default="gencode", choices=["gencode", "ensembl"], dest="ref_anno_type", help="Whether reference annotation is sourced from Gencode 'gencode' or Ensembl. This is so can use correct attribute key to extract protein-coding and lncRNA genes (default: %(default)s)")
+    parser.add_argument("--input-exon-number-format", default="stringtie", choices=["stringtie","strand_aware"], dest="novel_exon_n_fmt", help="Are 'exon numbers' in input transcripts assigned 1..n leftmost-rightmost ignoring strand (StringTie's convention, 'stringtie') or strand aware (Gencode & Ensembl annotation convention, 'strand_aware') (default: %(default)s)")
     parser.add_argument("-m", "--match-by", default="any", type=str, choices=["any", "transcript"], dest="match_by", help="Consider novel transcript a valid match if all but penultimate intron(s) match introns of any transcript ('any') or the same transcript ('transcript'). 'transcript' is CURRENTLY UNIMPLEMENTED (default: %(default)s)")
     parser.add_argument("-n", "--max-terminal-non-match", default=1, type=int, dest="max_terminal_non_match", help="Maximum number of uninterrupted reference-unmatched introns at 3'end of novel transcript for it to be considered a valid match (default: %(default)s)")
     parser.add_argument("-c", "--cores", default=1, type=int, help="number of cpus/threads for parallel processing (default: %(default)s)")
     parser.add_argument("-o", "--output-prefix", type=str, default="intron_chain_matched_transcripts", dest="output_prefix", help="Prefix for output files (GTF with valid matches, matching stats TSV etc.). '.<suffix>' added depending on output file type (default: %(default)s)")
-    parser.add_argument("--input-exon-number-format", default="stringtie", choices=["stringtie","strand_aware"], dest="novel_exon_n_fmt", help="Are 'exon numbers' in input transcripts assigned 1..n leftmost-rightmost ignoring strand (StringTie's convention, 'stringtie') or strand aware (Gencode annotation convention, 'strand_aware') (default: %(default)s)")
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -1766,4 +1806,4 @@ if __name__ == '__main__':
     else:
         exon_n_type = args.novel_exon_n_fmt
 
-    main(args.novel_gtf, args.ref_gtf, args.match_by, args.max_terminal_non_match, args.output_prefix, exon_n_type, args.cores)
+    main(args.novel_gtf, args.ref_gtf, args.match_by, args.max_terminal_non_match, args.output_prefix, exon_n_type, args.ref_anno_type, args.cores)
