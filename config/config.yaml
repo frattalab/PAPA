@@ -1,18 +1,19 @@
 
 #MUST END WITH SLASH
-main_output_dir: two_sample_example_output/
+main_output_dir: 2021-08-23_two_sample_example_output/
 
 sample_tbl: config/local_ward_ipsc_example_sample_tbl.csv
 
 annotation_gtf: data/annotation/gencode.v34.annotation.gtf
 
-# 'gencode' if GENCODE otherwise any other string
-# Used for Salmon index
+# One of 'gencode' if GENCODE or "ensembl" for ENSEMBL other string
+# Used for Salmon index &
+# scripts/filter_tx_by_intron_chain.py (for gene type filtering)
 annotation_source: "gencode"
 
 # An index file should also exist in same directory (suffixed with .fai)
 # Can be generated using samtools faidx
-genome_fasta: data/annotation/...
+genome_fasta: data/annotation/genome.fa
 
 # Put "none" for now. Other options possibly added in future...
 pre_stringtie_processing: "none"
@@ -35,6 +36,11 @@ salmon_kmer_size: 31
 ## Stringtie options/parameters
 ####------
 
+
+# Path to df containing Stringtie parameter values to try (1 combo per row)
+# -j, -f, -c, -t are defined here
+stringtie_params_csv: config/stringtie_params.csv
+
 # Use annotated poly(A) sites to help guide transcript assembly?
 # put True if yes, False if no (NO QUOTES around True/False)
 use_point_features: False
@@ -51,7 +57,7 @@ point_features_path: data/atlas.cluster.2.0.GRCh38.96_point_features.chr_prefix.
 # Or should these introns be able to come from any transcript ('any')?
 intron_chain_filter_mode: "any"
 
-# Maximum number of consective 3'end non-matched introns for a transcript to be considered validW
+# Maximum number of consective 3'end non-matched introns for a transcript to be considered valid
 # Default: 2 (equivalent to allowing the penultimate exon of transcript to also be novel)
 max_terminal_non_match: 2
 
@@ -59,9 +65,15 @@ max_terminal_non_match: 2
 # Default: 1
 intron_chain_filter_threads: 1
 
+# Minimum length of 3'end extension for novel 3'UTR extension events to be retained
+# Applied to 'internal_exon_bleedthrough' & 'ds_3utr_extension' events
+# Default: 100
+min_extension_length: 100
+
 
 # Default: 0.01
-min_isoform_fraction_abundance: 0.01
+# can be a single value between 0-1 or a list of values [val1, val2]
+min_isoform_fraction_abundance: [0.01, 0.05]
 
 # Default: 200
 min_isoform_length: 200
@@ -88,7 +100,7 @@ min_junction_overhang: 10
 # Can be a fraction
 # float
 # Default: 1
-min_junction_reads: 1
+min_junction_reads: [1,5]
 
 # Trim ends of assembled transcripts based on sudden drops in coverage?
 # controls whether <-t> flag is passed
@@ -99,7 +111,7 @@ disable_end_trimming: False
 # Minimum coverage for predicted transcripts to be reported in output
 # float
 # Default: 1
-min_txipt_coverage: 1
+min_txipt_coverage: [1,1.5]
 
 # Minimum coverage for single-exon predicted transcripts
 # float

@@ -203,8 +203,10 @@ def _df_add_region_number(df,id_col):
     Return a Series of strand-aware region numbers (5'-3' in 1..n)
     Function to be used internally in a pr.assign (mainly by add_region_number)
     '''
+    if id_col not in df.columns.tolist():
+        raise KeyError(f"id_col - {id_col} - is not present in df for chr/strand pair {','.join([df.Chromosome.iloc[0], df.Strand.iloc[0]])}")
 
-    if (df.Strand == "+").all():
+    elif (df.Strand == "+").all():
         # Start position smallest to largest = 5'-3'
 
         return df.groupby(id_col)["Start"].rank(method="min", ascending=True)
@@ -214,6 +216,9 @@ def _df_add_region_number(df,id_col):
 
         return df.groupby(id_col)["Start"].rank(method="min", ascending=False)
 
+    elif df.empty:
+        eprint("df is empty - returning empty pd.Series")
+        return pd.Series()
 
 def add_region_number(gr,
                       id_col="transcript_id",
