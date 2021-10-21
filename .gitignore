@@ -6,3 +6,9 @@ submissions/
 .snakemake/
 testing*
 envs/simple_*
+20*
+data/bams/
+data/annotation/
+data/Cont*
+data/TDP43*
+scripts/.ipynb_checkpoints/
