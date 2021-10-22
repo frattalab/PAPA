@@ -99,6 +99,7 @@ min_junction_overhang: 10
 # Junctions should have at least n spliced reads aligning across it
 # Can be a fraction
 # float
+# can be a single value starting from 1 or a list of values [val1, val2]
 # Default: 1
 min_junction_reads: [1,5]
 
@@ -110,6 +111,7 @@ disable_end_trimming: False
 
 # Minimum coverage for predicted transcripts to be reported in output
 # float
+# can be a single value starting from 1 or a list of values [val1, val2]
 # Default: 1
 min_txipt_coverage: [1,1.5]
 
@@ -141,6 +143,7 @@ label: "PAPA"
 # Stringtie reports assembled transcripts matching reference transcripts in its assembled GTF
 # Since these can't be novel they can be ignored for transcript filtering/analysis
 # DEPRECATED - 3'UTR EXTENSIONS AND BLEEDTHROUGH EVENTS APPEAR TO BE ASSIGNED REFERENCE_ID
+
 stringtie_ref_string: "reference_id"
 
 # Merge parameters
