@@ -36,7 +36,7 @@ rule stringtie:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}" "{sample}.stringtie_assemble.log")
+        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}.stringtie_assemble.log")
 
     shell:
         """
@@ -98,8 +98,10 @@ rule intron_chain_filter:
     params:
         script = "scripts/filter_tx_by_intron_chain.py",
         ref_gtf = GTF,
+        annot_source = config["annotation_source"],
         match_by = config["intron_chain_filter_mode"],
         max_terminal_non_match = config["max_terminal_non_match"],
+        min_ext_length = config["min_extension_length"],
         out_prefix = os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}.intron_chain_filtered.assembled")
 
     conda:
@@ -116,8 +118,10 @@ rule intron_chain_filter:
         python {params.script} \
         -i {input} \
         -r {params.ref_gtf} \
+        -s {params.annot_source} \
         -m {params.match_by} \
         -n {params.max_terminal_non_match} \
+        -e {params.min_ext_length} \
         -c {resources.threads} \
         -o {params.out_prefix} \
         2> {log}
