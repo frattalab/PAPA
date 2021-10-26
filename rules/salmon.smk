@@ -11,7 +11,11 @@ rule custom_txome_fasta:
     For use with Salmon
     '''
     input:
-        os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "all_samples.intron_chain_filtered.ref_merged.combined.gtf")
+        os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf")
 
     output:
         os.path.join(SALMON_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "papa.transcripts.fa")
@@ -20,7 +24,7 @@ rule custom_txome_fasta:
         genome_fa = config["genome_fasta"]
 
     log:
-        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "custom_txome_fasta.gffread.log")
+        os.path.join(LOG_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "custom_txome_fasta.log")
 
     conda:
         "../envs/papa.yaml"
