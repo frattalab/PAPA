@@ -70,6 +70,11 @@ intron_chain_filter_threads: 1
 # Default: 100
 min_extension_length: 100
 
+# Minimum mean TPM value across samples of the same condition for an assembled transcript to be retained
+# Proposed to considerably improve transcript accuracy (Bioxriv pre-print from Swamy et al.; 2020)
+# Default: 1
+min_mean_tpm: 1
+
 
 # Default: 0.01
 # can be a single value between 0-1 or a list of values [val1, val2]
