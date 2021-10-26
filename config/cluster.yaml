@@ -16,13 +16,19 @@ intron_chain_filter:
   h_rt:  8:00:00
   submission_string: " "
 
-gtf_merge_novel:
+three_end_filter:
   h_vmem: 6G
   tmem: 6G
   h_rt:  4:00:00
   submission_string: " "
 
-gtf_merge_ref:
+merge_by_condition:
+  h_vmem: 6G
+  tmem: 6G
+  h_rt:  4:00:00
+  submission_string: " "
+
+merge_filtered_with_ref:
   h_vmem: 6G
   tmem: 6G
   h_rt:  4:00:00
