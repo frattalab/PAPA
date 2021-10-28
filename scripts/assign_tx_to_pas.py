@@ -25,7 +25,7 @@ def cluster_to_region_number(gr, group_id_col, out_col="pas_number", cluster_col
     return c2p
 
 
-def main(gtf_path, window_size, group_id_col, tx_id_col, output_tsv):
+def main(gtf_path, window_size, group_id_col, tx_id_col, output_prefix):
     '''
     '''
 
@@ -86,14 +86,29 @@ def main(gtf_path, window_size, group_id_col, tx_id_col, output_tsv):
                                                                  to_merge_cols=pas_cols)
                        )
 
-    tx_to_pas = le.as_df()[[group_id_col, tx_id_col, "pas_number", "le_number"]]
+
+    eprint("assigning 'pas_id' for each gene...")
+    le = le.assign("pas_id",
+                   lambda df: df[group_id_col] + "_" + df["pas_number"].astype(int).astype(str))
+
+    tx_to_pas = le.as_df()[[group_id_col, tx_id_col, "pas_number", "le_number", "pas_id"]]
 
 
 
-    eprint(f"Writing PAS and LE assignment dataframe to TSV... - {output_tsv}")
+    eprint(f"Writing PAS and LE assignment dataframe to TSV... - {output_prefix + '.pas_assignment.tsv'}")
 
-    tx_to_pas.sort_values(by=[group_id_col, "pas_number"]).to_csv(output_tsv, sep="\t", index=False, header=True)
+    tx_to_pas.sort_values(by=[group_id_col,
+                              "pas_number"]).to_csv(output_prefix + ".pas_assignment.tsv",
+                                                    sep="\t",
+                                                    index=False,
+                                                    header=True)
 
+    eprint(f"Writing 'tx2pas' (transcript_id | pas_id) to TSV... - {output_prefix + '.tx2pas.tsv'}")
+    tx_to_pas[[tx_id_col,
+               "pas_id"]].drop_duplicates().to_csv(output_prefix + ".tx2pas.tsv",
+                                                   sep="\t",
+                                                   index=False,
+                                                   header=True)
 
 
 if __name__ == '__main__':
@@ -132,12 +147,12 @@ if __name__ == '__main__':
                         default="transcript_id",
                         help="Name of GTF attribute key that defines transcripts. Used to return polyA site assignments for these features")
 
-    parser.add_argument("-o","--output-tsv",
-                        dest="output_tsv",
+    parser.add_argument("-o","--output-prefix",
+                        dest="output_prefix",
                         type=str,
                         default=argparse.SUPPRESS,
                         required=True,
-                        help="path to/name of output TSV file storing polyA site assignment per transcript/gene (tx_id | gene_id| polyA_site_number | polyA_site_ID)")
+                        help="path to/prefix for output files. '.pas_assignment.tsv' is suffixed for TSV file storing polyA site assignment per transcript/gene (tx_id | gene_id| pas_number | pas_id)")
 
 
 
@@ -151,7 +166,7 @@ if __name__ == '__main__':
     if (args.merge_window_size % 2) == 0:
         raise ValueError(f"-w/--merge-window-size value must be an odd number - you provided {args.merge_window_size}. This is so can extend equally in either direction of the poly(A) site (1nt length interval)")
 
-    main(args.input_gtf, args.merge_window_size, args.group_id_key, args.tx_id_key, args.output_tsv)
+    main(args.input_gtf, args.merge_window_size, args.group_id_key, args.tx_id_key, args.output_prefix)
 
     end = timer()
 
