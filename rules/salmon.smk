@@ -15,7 +15,7 @@ rule custom_txome_fasta:
                      "min_jnc_{min_jnc}",
                      "min_frac_{min_frac}",
                      "min_cov_{min_cov}",
-                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf")
+                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.annotated.gtf")
 
     output:
         os.path.join(SALMON_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "papa.transcripts.fa")
@@ -106,7 +106,7 @@ rule salmon_quant_pe:
         os.path.join(SALMON_SUBDIR, "quant", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}", "quant.sf")
 
     params:
-        index_dir = os.path.join(SALMON_SUBDIR, "index",),
+        index_dir = os.path.join(SALMON_SUBDIR, "index", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}"),
         output_dir = os.path.join(SALMON_SUBDIR, "quant", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}"),
         libtype = "A"
 

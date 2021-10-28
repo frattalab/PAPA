@@ -17,7 +17,7 @@ rule gtf_list_by_condition:
                            "gtf_list_{condition}.txt")
 
     group:
-        "transcript_filtering"
+        "transcript_filtering_tpm"
 
     run:
         with open(output.txt, 'w') as out:
@@ -67,7 +67,7 @@ rule merge_by_condition:
                      "{condition}_merge_by_condition.log")
 
     group:
-        "transcript_filtering"
+        "transcript_filtering_tpm"
 
     shell:
         """
@@ -75,7 +75,7 @@ rule merge_by_condition:
         -o {params.out_prefix} \
         -p {params.label} \
         -V \
-        {input} \
+        -i {input} \
         2> {log}
         """
 
@@ -127,7 +127,7 @@ rule tx_condition_mean_tpm_filter:
                      "{condition}_tx_condition_mean_tpm_filter.log")
 
     group:
-        "transcript_filtering"
+        "transcript_filtering_tpm"
 
     shell:
         """
@@ -158,7 +158,7 @@ rule gtf_list_all_tpm_filtered:
                            "all_conditions_tpm_filtered_gtf_list.txt")
 
     group:
-        "transcript_filtering"
+        "transcript_filtering_tpm"
 
     run:
         with open(output.txt, 'w') as out:
@@ -198,7 +198,7 @@ rule merge_all_tpm_filtered:
                      "merge_all_tpm_filtered.log")
 
     group:
-        "transcript_filtering"
+        "transcript_filtering_tpm"
 
     shell:
         """
@@ -206,7 +206,7 @@ rule merge_all_tpm_filtered:
         -o {params.out_prefix} \
         -p {params.label} \
         -V \
-        {input} \
+        -i {input} \
         2> {log}
         """
 
@@ -257,12 +257,15 @@ rule intron_chain_filter:
         threads = config["intron_chain_filter_threads"]
 
     group:
-        "transcript_filtering"
+        "transcript_filtering_chain_3p"
 
     shell:
         """
+        # remove undefined strand rows from novel GTF	
+        awk '{{if ($7!=".") {{print $0}} }}' {input} > {input}.tmp 
+
         python {params.script} \
-        -i {input} \
+        -i {input}.tmp \
         -r {params.ref_gtf} \
         -s {params.annot_source} \
         -m {params.match_by} \
@@ -271,6 +274,8 @@ rule intron_chain_filter:
         -c {resources.threads} \
         -o {params.out_prefix} \
         2> {log}
+
+        rm {input}.tmp
         """
 
 rule three_end_filter:
@@ -316,7 +321,7 @@ rule three_end_filter:
                      "three_end_filter.log")
 
     group:
-        "transcript_filtering"
+        "transcript_filtering_chain_3p"
 
     shell:
         """
@@ -349,7 +354,7 @@ rule merge_filtered_with_ref:
                      "min_jnc_{min_jnc}",
                      "min_frac_{min_frac}",
                      "min_cov_{min_cov}",
-                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf")
+                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.annotated.gtf")
 
     params:
         ref_gtf = GTF,
@@ -371,7 +376,7 @@ rule merge_filtered_with_ref:
                      "merge_filtered_with_ref.log")
 
     group:
-        "transcript_filtering"
+        "transcript_filtering_chain_3p"
 
     shell:
         """

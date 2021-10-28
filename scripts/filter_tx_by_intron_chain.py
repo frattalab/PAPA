@@ -1234,6 +1234,8 @@ def main(novel_path, ref_path,
     e1 = timer()
 
     eprint("took {} s".format(e1 - s1))
+    
+    eprint(f"input GTF keys - {novel.keys()}")
 
     eprint("reading gtf containing reference transcripts...")
 
@@ -1242,6 +1244,8 @@ def main(novel_path, ref_path,
     e2 = timer()
 
     eprint("took {} s".format(e2 - s2))
+
+    eprint(f"reference GTF keys - {ref.keys()}")
 
     eprint("extracting protein-coding & lncRNA gene types from reference annotation file...")
 
