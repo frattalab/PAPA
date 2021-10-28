@@ -15,7 +15,7 @@ rule custom_txome_fasta:
                      "min_jnc_{min_jnc}",
                      "min_frac_{min_frac}",
                      "min_cov_{min_cov}",
-                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.annotated.gtf")
+                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf")
 
     output:
         os.path.join(SALMON_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "papa.transcripts.fa")

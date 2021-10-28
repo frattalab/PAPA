@@ -333,7 +333,8 @@ rule three_end_filter:
         -p {params.motifs} \
         -m {params.max_atl_dist} \
         -u {params.motif_len} \
-        -o {params.output_prefix}
+        -o {params.output_prefix} \
+        2> {log}
         """
 
 
@@ -354,7 +355,7 @@ rule merge_filtered_with_ref:
                      "min_jnc_{min_jnc}",
                      "min_frac_{min_frac}",
                      "min_cov_{min_cov}",
-                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.annotated.gtf")
+                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf")
 
     params:
         ref_gtf = GTF,
@@ -381,10 +382,9 @@ rule merge_filtered_with_ref:
     shell:
         """
         gffcompare \
-        -r {params.ref_gtf} \
         -o {params.out_prefix} \
         -p {params.label} \
         -V \
-        {input} \
+        {input} {params.ref_gtf} \
         2> {log}
         """
