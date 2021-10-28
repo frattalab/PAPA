@@ -16,6 +16,18 @@ intron_chain_filter:
   h_rt:  8:00:00
   submission_string: " "
 
+transcript_filtering_tpm:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  8:00:00
+  submission_string: " "
+
+transcript_filtering_chain_3p:
+  h_vmem: 14G
+  tmem: 14G
+  h_rt:  8:00:00
+  submission_string: " "
+
 three_end_filter:
   h_vmem: 6G
   tmem: 6G
@@ -47,13 +59,13 @@ generate_full_decoys:
   submission_string: " "
 
 salmon_index:
-  h_vmem: 8G
-  tmem: 8G
+  h_vmem: 20G
+  tmem: 20G
   h_rt:  12:00:00
   submission_string: "-pe smp 2 -R y"
 
 salmon_quant_pe:
-  h_vmem: 8G
-  tmem: 8G
+  h_vmem: 14G
+  tmem: 14G
   submission_string: "-pe smp 2 -R y"
   h_rt: 12:00:00
