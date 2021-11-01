@@ -110,6 +110,13 @@ def main(gtf_path, window_size, group_id_col, tx_id_col, output_prefix):
                                                    index=False,
                                                    header=True)
 
+    eprint(f"Writing 'tx2pas' (transcript_id | gene_id) to TSV... - {output_prefix + '.tx2gene.tsv'}")
+    tx_to_pas[[tx_id_col,
+               group_id_col]].drop_duplicates().to_csv(output_prefix + ".tx2gene.tsv",
+                                                   sep="\t",
+                                                   index=False,
+                                                   header=True)
+
 
 if __name__ == '__main__':
 
