@@ -55,7 +55,7 @@ def main(gtf_path,tracking_path,gtf_list_path,min_mean_tpm,output_prefix):
     tracking["mean_tpm"] = tracking[samples_list].mean(axis=1)
 
     #5. Get set of transcripts passing min mean TPM filter
-    eprint("Filtering transcripts based on min mean TPM - {min_mean_tpm}")
+    eprint(f"Filtering transcripts based on min mean TPM - {min_mean_tpm}")
     eprint(f"Number of transcripts pre mean TPM >= {min_mean_tpm} filter - {len(set(tracking.transcript_id))}")
 
     valid_tx_ids = set(tracking.loc[tracking["mean_tpm"] >= min_mean_tpm,
@@ -79,7 +79,10 @@ def main(gtf_path,tracking_path,gtf_list_path,min_mean_tpm,output_prefix):
     tpm_cols = ["transcript_id", "gene_id", "mean_tpm"] + samples_list
     tracking = tracking[tpm_cols]
 
-    tracking.to_csv(output_prefix + ".tpm_matrix.tsv")
+    tracking.to_csv(output_prefix + ".tpm_matrix.tsv",
+                    sep="\t",
+                    index=False,
+                    header=True)
 
 
 

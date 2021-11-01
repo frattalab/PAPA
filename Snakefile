@@ -23,6 +23,7 @@ def param_list(param):
 sample_tbl = pd.read_csv(config["sample_tbl"], index_col="sample_name")
 
 SAMPLES = sample_tbl.index.tolist()
+CONDITIONS = sample_tbl["condition"].tolist()
 OPTIONS = sample_tbl.to_dict(orient="index")
 
 GTF = config["annotation_gtf"]
@@ -37,31 +38,48 @@ min_frac_vals = param_list(config["min_isoform_fraction_abundance"])
 min_jnc_vals = param_list(config["min_junction_reads"])
 min_cov_vals = param_list(config["min_txipt_coverage"])
 
-print(min_frac_vals)
-print(min_jnc_vals)
-print(min_cov_vals)
+# print(OPTIONS)
+# print(min_frac_vals)
+# print(min_jnc_vals)
+# print(min_cov_vals)
 
 include: "rules/stringtie.smk"
 include: "rules/salmon.smk"
+include: "rules/tx_filtering.smk"
 
 
-localrules: all, compose_gtf_list_stringtie
+localrules: all, gtf_list_by_condition, gtf_list_all_tpm_filtered
 
 wildcard_constraints:
-    sample = "|".join(SAMPLES)
+    sample = "|".join(SAMPLES),
+    condition = "|".join(CONDITIONS)
 
 rule all:
     input:
+        # expand(os.path.join(STRINGTIE_SUBDIR,
+        #                     "min_jnc_{min_jnc}",
+        #                     "min_frac_{min_frac}",
+        #                     "min_cov_{min_cov}",
+        #                     # "{condition}",
+        #                     "{condition}.min_mean_tpm_filtered.gtf"),
+        #        condition=CONDITIONS,
+        #        min_jnc=min_jnc_vals,
+        #        min_frac=min_frac_vals,
+        #        min_cov=min_cov_vals),
         expand(os.path.join(SALMON_SUBDIR, "quant", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}","quant.sf"),
                sample=SAMPLES,
                min_jnc=min_jnc_vals,
                min_frac=min_frac_vals,
                min_cov=min_cov_vals
                ),
-        expand(os.path.join(STRINGTIE_SUBDIR, "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "all_samples.intron_chain_filtered.novel.combined.gtf"),
-               min_jnc=min_jnc_vals,
-               min_frac=min_frac_vals,
-               min_cov=min_cov_vals)
+        # expand(os.path.join(STRINGTIE_SUBDIR,
+        #                     "min_jnc_{min_jnc}",
+        #                     "min_frac_{min_frac}",
+        #                     "min_cov_{min_cov}",
+        #                     "tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf"),
+        #        min_jnc=min_jnc_vals,
+        #        min_frac=min_frac_vals,
+        #        min_cov=min_cov_vals)
 
 
 def get_bam(sample, options, output_dir):
@@ -87,8 +105,16 @@ def get_bam(sample, options, output_dir):
     else:
         raise ValueError("{} is invalid value for 'pre_stringtie_processing' option - please use 'none'".format(config["pre_stringtie_processing"]))
 
+def get_sample_condition(sample, options):
+    '''
+    Return condition for given sample from options dict (sample table)
+    '''
 
+    return options[sample]["condition"]
 
+def get_condition_samples(condition, options):
+
+    return [sample for sample in options.keys() if options[sample]["condition"] == condition]
 
 
 
