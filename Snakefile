@@ -33,6 +33,7 @@ OUTPUT_DIR = os.path.join(config["main_output_dir"], "")
 STRINGTIE_SUBDIR = os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"], "")
 SALMON_SUBDIR = os.path.join(OUTPUT_DIR, config["salmon_subdir_name"], "")
 LOG_SUBDIR = os.path.join(OUTPUT_DIR, config["logs_subdir_name"], "")
+DAPA_SUBDIR = os.path.join(OUTPUT_DIR, config["diff_apa_subdir_name"], "")
 
 min_frac_vals = param_list(config["min_isoform_fraction_abundance"])
 min_jnc_vals = param_list(config["min_junction_reads"])
@@ -46,6 +47,7 @@ min_cov_vals = param_list(config["min_txipt_coverage"])
 include: "rules/stringtie.smk"
 include: "rules/salmon.smk"
 include: "rules/tx_filtering.smk"
+include: "rules/differential_apa.smk"
 
 
 localrules: all, gtf_list_by_condition, gtf_list_all_tpm_filtered
@@ -66,12 +68,21 @@ rule all:
         #        min_jnc=min_jnc_vals,
         #        min_frac=min_frac_vals,
         #        min_cov=min_cov_vals),
-        expand(os.path.join(SALMON_SUBDIR, "quant", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}","quant.sf"),
-               sample=SAMPLES,
+        expand(os.path.join(SALMON_SUBDIR,
+                             "pas_quant",
+                             "min_jnc_{min_jnc}",
+                             "min_frac_{min_frac}",
+                             "min_cov_{min_cov}",
+                             "summarised_pas_quantification.tsv"),
                min_jnc=min_jnc_vals,
                min_frac=min_frac_vals,
-               min_cov=min_cov_vals
-               ),
+               min_cov=min_cov_vals),
+        # expand(os.path.join(SALMON_SUBDIR, "quant", "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}", "{sample}","quant.sf"),
+        #        sample=SAMPLES,
+        #        min_jnc=min_jnc_vals,
+        #        min_frac=min_frac_vals,
+        #        min_cov=min_cov_vals
+        #        ),
         # expand(os.path.join(STRINGTIE_SUBDIR,
         #                     "min_jnc_{min_jnc}",
         #                     "min_frac_{min_frac}",

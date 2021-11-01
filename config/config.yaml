@@ -171,9 +171,13 @@ min_iso_frac_merge: 0.01
 keep_retained_introns_merge: False
 
 
+# assign_tx_to_pas.py - size of window centred on 3'end of each transcripts to merge closely spaced polyA sites
+pas_merge_window_size: 25
+
 ####
 # Names of subdirectories for individual steps. No need to change these unless you don't like them!
 ####
 stringtie_subdir_name: stringtie/
 salmon_subdir_name: salmon/
 logs_subdir_name: logs/
+diff_apa_subdir_name: differential_apa/

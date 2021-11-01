@@ -261,8 +261,8 @@ rule intron_chain_filter:
 
     shell:
         """
-        # remove undefined strand rows from novel GTF	
-        awk '{{if ($7!=".") {{print $0}} }}' {input} > {input}.tmp 
+        # remove undefined strand rows from novel GTF
+        awk '{{if ($7!=".") {{print $0}} }}' {input} > {input}.tmp
 
         python {params.script} \
         -i {input}.tmp \
