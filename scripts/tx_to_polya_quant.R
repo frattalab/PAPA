@@ -16,7 +16,7 @@ option_list <- list(make_option(c("-s", "--sample-table"),
                                 type="character",
                                 help = "Path to <prefix>'.tx2pas.tsv file storing transcript ID to Gene ID assignment output by assign_tx_to_pas.py"),
                     make_option(c("-o", "--output-file"),
-                                dest = "output_file", 
+                                dest = "output_file",
                                 default = "summarised_pas_quantification.tsv",
                                 help = "Name of output TSV file storing summarise per-poly(A) site quantification ([default= %default])")
                     )
@@ -30,7 +30,7 @@ if (length(commandArgs(trailingOnly = TRUE)) == 0) {
   stop()
 }
 
-#1. Read in sample table & construct paths to all Salmon quantification files 
+#1. Read in sample table & construct paths to all Salmon quantification files
 
 # opt_parser$sample_table
 sample_tbl <- read.table(opt$sample_table,
@@ -80,6 +80,9 @@ pas_counts <- merge(pas_counts,
 
 # reorder so pas_id | gene_id are the first two columns
 pas_counts <- pas_counts[, c(1, ncol(pas_counts), seq(2, ncol(pas_counts) - 1, 1))]
+
+# Just in case, remove duplicate pas_id rows from matrix
+pas_counts <- pas_counts[!duplicated(pas_counts$pas_id), ]
 
 # "data/tximport_pas_quantification.tsv"
 write.table(pas_counts,
