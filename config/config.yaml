@@ -35,6 +35,12 @@ salmon_quant_threads: 2
 
 salmon_kmer_size: 31
 
+
+#"polyA" to sum expression based on shared PAS
+#"last_exon" to sum expression based on shared last exon (any overlap)
+expression_merge_by: "last_exon"
+
+
 ####------
 ## Stringtie options/parameters
 ####------

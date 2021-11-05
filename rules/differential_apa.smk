@@ -19,11 +19,26 @@ rule assign_tx_to_pas:
                      "min_frac_{min_frac}",
                      "min_cov_{min_cov}",
                      "ref_merged.tx2gene.tsv"),
+        pas2gene = os.path.join(STRINGTIE_SUBDIR,
+                                "min_jnc_{min_jnc}",
+                                "min_frac_{min_frac}",
+                                "min_cov_{min_cov}",
+                                "ref_merged.pas2gene.tsv"),
         pas_le_df = os.path.join(STRINGTIE_SUBDIR,
                                "min_jnc_{min_jnc}",
                                "min_frac_{min_frac}",
                                "min_cov_{min_cov}",
-                               "ref_merged.pas_assignment.tsv")
+                               "ref_merged.pas_assignment.tsv"),
+        tx2le = os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "ref_merged.tx2le.tsv") if config["merge_by"] == "last_exon" else [],
+        le2gene = os.path.join(STRINGTIE_SUBDIR,
+                                "min_jnc_{min_jnc}",
+                                "min_frac_{min_frac}",
+                                "min_cov_{min_cov}",
+                                "ref_merged.le2gene.tsv") if config["merge_by"] == "last_exon" else []
 
     params:
         script = "scripts/assign_tx_to_pas.py",
@@ -60,18 +75,23 @@ rule assign_tx_to_pas:
         """
 
 
+
 rule tx_to_polya_quant:
     input:
         tx2pas = os.path.join(STRINGTIE_SUBDIR,
                      "min_jnc_{min_jnc}",
                      "min_frac_{min_frac}",
                      "min_cov_{min_cov}",
-                     "ref_merged.tx2pas.tsv"),
+                     "ref_merged.tx2pas.tsv") if config["merge_by"] == "polyA" else os.path.join(STRINGTIE_SUBDIR,
+                                                                                                 "min_jnc_{min_jnc}",
+                                                                                                 "min_frac_{min_frac}",
+                                                                                                 "min_cov_{min_cov}",
+                                                                                                 "ref_merged.tx2le.tsv"),
         tx2gene = os.path.join(STRINGTIE_SUBDIR,
-                     "min_jnc_{min_jnc}",
-                     "min_frac_{min_frac}",
-                     "min_cov_{min_cov}",
-                     "ref_merged.tx2gene.tsv"),
+                               "min_jnc_{min_jnc}",
+                               "min_frac_{min_frac}",
+                               "min_cov_{min_cov}",
+                               "ref_merged.tx2gene.tsv"),
         quant = expand(os.path.join(SALMON_SUBDIR,
                                     "quant",
                                     "min_jnc_{{min_jnc}}",
