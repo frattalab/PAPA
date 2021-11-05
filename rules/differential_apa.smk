@@ -33,12 +33,12 @@ rule assign_tx_to_pas:
                      "min_jnc_{min_jnc}",
                      "min_frac_{min_frac}",
                      "min_cov_{min_cov}",
-                     "ref_merged.tx2le.tsv") if config["merge_by"] == "last_exon" else [],
+                     "ref_merged.tx2le.tsv") if config["expression_merge_by"] == "last_exon" else [],
         le2gene = os.path.join(STRINGTIE_SUBDIR,
                                 "min_jnc_{min_jnc}",
                                 "min_frac_{min_frac}",
                                 "min_cov_{min_cov}",
-                                "ref_merged.le2gene.tsv") if config["merge_by"] == "last_exon" else []
+                                "ref_merged.le2gene.tsv") if config["expression_merge_by"] == "last_exon" else []
 
     params:
         script = "scripts/assign_tx_to_pas.py",
@@ -82,7 +82,7 @@ rule tx_to_polya_quant:
                      "min_jnc_{min_jnc}",
                      "min_frac_{min_frac}",
                      "min_cov_{min_cov}",
-                     "ref_merged.tx2pas.tsv") if config["merge_by"] == "polyA" else os.path.join(STRINGTIE_SUBDIR,
+                     "ref_merged.tx2pas.tsv") if config["expression_merge_by"] == "polyA" else os.path.join(STRINGTIE_SUBDIR,
                                                                                                  "min_jnc_{min_jnc}",
                                                                                                  "min_frac_{min_frac}",
                                                                                                  "min_cov_{min_cov}",
