@@ -19,15 +19,34 @@ def cluster_to_region_number(gr, group_id_col, out_col="pas_number", cluster_col
     n = most 3' site in group_id_col
     '''
 
-    c2p = gr.assign(out_col,
+    # For groupby.rank to work appropriately, need a single row per 'Cluster'
+    c2p = (gr[[group_id_col, cluster_col]]
+           .apply(lambda df: df.drop_duplicates(subset=cluster_col)
+                  )
+           )
+
+    # Add 1..n 5'-3' region number as a column
+    c2p = c2p.assign(out_col,
                     lambda df: _df_add_region_number(df, group_id_col, cluster_col))
 
-    return c2p
+    # Return 'out_col' to original gr
+    c2p_cols = c2p.columns.tolist()
+    out_gr = gr.apply_pair(c2p, lambda df, df_to_merge: _pd_merge_gr(df,
+                                                                     df_to_merge,how="left",
+                                                                     on=cluster_col,
+                                                                     suffixes=[None, "_match"],
+                                                                     to_merge_cols=c2p_cols)
+                           )
+
+    # avoid adding extra 'PyRanges' cols (Chromosome etc.) from c2p
+    return out_gr.drop(like="_match$")
 
 
-def main(gtf_path, window_size, group_id_col, tx_id_col, output_prefix):
+def main(gtf_path, window_size, group_id_col, tx_id_col, tx2le, output_prefix):
     '''
     '''
+
+    assert isinstance(tx2le, bool)
 
     eprint(f"Reading in input GTF file... - {gtf_path}")
     gtf = pr.read_gtf(gtf_path)
@@ -64,6 +83,11 @@ def main(gtf_path, window_size, group_id_col, tx_id_col, output_prefix):
     # adds 'pas_number' column
     pas = cluster_to_region_number(pas, group_id_col)
 
+    # DF blows up if I don't do this
+    pas = pas.apply(lambda df: df.drop_duplicates(subset=tx_id_col))
+
+    # eprint(pas[["gene_id","transcript_id","Cluster","pas_number"]])
+
     pas = pas[["gene_id", "transcript_id", "pas_number"]]
 
     #Also perform a last exon classification
@@ -73,6 +97,10 @@ def main(gtf_path, window_size, group_id_col, tx_id_col, output_prefix):
     le = le.cluster(by=group_id_col)
 
     le = cluster_to_region_number(le, group_id_col, out_col="le_number")
+    # DF blows up if I don't do this
+    le = le.apply(lambda df: df.drop_duplicates(subset=tx_id_col))
+
+    # eprint(le[["gene_id","transcript_id","Cluster","le_number","pas_number"]])
 
     # Merge le with pas so that le_number and pas_number are in the same gr
     eprint("Merging pas_number & le_number for each transcript into common dataframe...")
@@ -91,7 +119,13 @@ def main(gtf_path, window_size, group_id_col, tx_id_col, output_prefix):
     le = le.assign("pas_id",
                    lambda df: df[group_id_col] + "_" + df["pas_number"].astype(int).astype(str))
 
-    tx_to_pas = le.as_df()[[group_id_col, tx_id_col, "pas_number", "le_number", "pas_id"]]
+    eprint("assigning 'le_id' (last exon ID) for each gene...")
+    le = le.assign("le_id",
+                   lambda df: df[group_id_col] + "_" + df["le_number"].astype(int).astype(str))
+
+    tx_to_pas = le.as_df()[[group_id_col, tx_id_col,
+                            "pas_number", "le_number",
+                            "pas_id", "le_id"]]
 
 
 
@@ -110,7 +144,7 @@ def main(gtf_path, window_size, group_id_col, tx_id_col, output_prefix):
                                                    index=False,
                                                    header=True)
 
-    eprint(f"Writing 'tx2pas' (transcript_id | gene_id) to TSV... - {output_prefix + '.tx2gene.tsv'}")
+    eprint(f"Writing 'tx2gene' (transcript_id | gene_id) to TSV... - {output_prefix + '.tx2gene.tsv'}")
     tx_to_pas[[tx_id_col,
                group_id_col]].drop_duplicates().to_csv(output_prefix + ".tx2gene.tsv",
                                                    sep="\t",
@@ -123,6 +157,27 @@ def main(gtf_path, window_size, group_id_col, tx_id_col, output_prefix):
                                                    sep="\t",
                                                    index=False,
                                                    header=True)
+
+    if tx2le:
+        eprint("Outputting transcript to last exon assignment information...")
+
+        eprint(f"Writing 'le2pas' (transcript_id | pas_id) to TSV... - {output_prefix + '.tx2le.tsv'}")
+        tx_to_pas[[tx_id_col,
+                   "le_id"]].drop_duplicates().to_csv(output_prefix + ".tx2le.tsv",
+                                                       sep="\t",
+                                                       index=False,
+                                                       header=True)
+
+        eprint(f"Writing 'le2gene' (le_id | gene_id) to TSV... - {output_prefix + '.le2gene.tsv'}")
+        tx_to_pas[["le_id",
+                   group_id_col]].drop_duplicates().to_csv(output_prefix + ".le2gene.tsv",
+                                                       sep="\t",
+                                                       index=False,
+                                                       header=True)
+
+
+
+
 
 if __name__ == '__main__':
 
@@ -167,6 +222,10 @@ if __name__ == '__main__':
                         required=True,
                         help="path to/prefix for output files. '.pas_assignment.tsv' is suffixed for TSV file storing polyA site assignment per transcript/gene (tx_id | gene_id| pas_number | pas_id)")
 
+    parser.add_argument("-l","--tx2le",
+                        default=False,
+                        action="store_true",
+                        help="Whether to also output transcript to shared last exon assignment (same files as for pas assignment, with pas_id replaced with le_id")
 
 
     if len(sys.argv) == 1:
@@ -179,7 +238,7 @@ if __name__ == '__main__':
     if (args.merge_window_size % 2) == 0:
         raise ValueError(f"-w/--merge-window-size value must be an odd number - you provided {args.merge_window_size}. This is so can extend equally in either direction of the poly(A) site (1nt length interval)")
 
-    main(args.input_gtf, args.merge_window_size, args.group_id_key, args.tx_id_key, args.output_prefix)
+    main(args.input_gtf, args.merge_window_size, args.group_id_key, args.tx_id_key, args.tx2le, args.output_prefix)
 
     end = timer()
 
