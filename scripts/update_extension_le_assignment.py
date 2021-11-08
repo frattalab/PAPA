@@ -111,11 +111,11 @@ def main(pas_assignment_path, tx2le_path, le2gene_path, match_stats_path, loci_p
     match_stats = pd.read_csv(match_stats_path, sep="\t")
 
     pre_merge_ext_ids = set(match_stats.loc[(match_stats["match_class"] == "valid") &
-                                  (match_stats["isoform_class"] == "ds_3utr_extension"),
-                                  "transcript_id_novel"]
-                  )
+                                            (match_stats["isoform_class"] == "ds_3utr_extension"),
+                                            "transcript_id_novel"]
+                            )
 
-    eprint(len(pre_merge_ext_ids))
+    # eprint(len(pre_merge_ext_ids))
 
     # Note that IDs from match stats come from pre-reference merging
     # i.e. IDs in pas_assignment, tx2le etc. will be different
@@ -153,7 +153,7 @@ def main(pas_assignment_path, tx2le_path, le2gene_path, match_stats_path, loci_p
 
     loci = loci.loc[loci["n_extension_ids"] != 0, :]
 
-    eprint(loci["ext_ids"].apply(len).describe())
+    # eprint(loci["ext_ids"].apply(len).describe())
 
 
     #4. Read in tx2le & le2gene - create df of tx_id | le_id | gene_id
@@ -189,13 +189,13 @@ def main(pas_assignment_path, tx2le_path, le2gene_path, match_stats_path, loci_p
     post_merge_ext_ids = set(tracking.loc[tracking["pre_merge_tx_id"].isin(pre_merge_ext_ids),
                                           "post_merge_tx_id"])
 
-    eprint(len(post_merge_ext_ids))
+    # eprint(len(post_merge_ext_ids))
 
     ext_tx2le2gene["is_extension"] = np.where(ext_tx2le2gene["transcript_id"].isin(post_merge_ext_ids),
                                               1,
                                               0)
 
-    eprint(ext_tx2le2gene["is_extension"].value_counts())
+    # eprint(ext_tx2le2gene["is_extension"].value_counts())
 
     # Update assigned last exon number for genes with extension events
     # Extra sort so extension events come after non-extensions of the same le_id
@@ -212,14 +212,62 @@ def main(pas_assignment_path, tx2le_path, le2gene_path, match_stats_path, loci_p
 
     # eprint(ext_tx2le2gene)
 
-    eprint(ext_tx2le2gene.loc[ext_tx2le2gene.gene_id == "XLOC_000184", :])
 
 
     # Create new le_id
     ext_tx2le2gene["new_le_id"] = ext_tx2le2gene["gene_id"] + "_" + ext_tx2le2gene["post_le_number"].astype(str)
-    ext_tx2le2gene = ext_tx2le2gene.drop("le_id", axis=1).rename({"new_le_id": "le_id"}, axis=1)
+    ext_tx2le2gene = (ext_tx2le2gene.drop(["le_id",
+                                           "le_id_count",
+                                           "is_extension",
+                                           "pre_le_number"],
+                                          axis=1)
+                                    .rename({"new_le_id": "le_id",
+                                             "post_le_number": "le_number"},
+                                            axis=1)
+                      )
 
-    eprint(ext_tx2le2gene)
+    # eprint(ext_tx2le2gene)
+
+    # Create updated '.pas_assignment.tsv'
+    # First - return pas_number & pas_id to ext_tx2le2gene
+    pas_assignment = pd.read_csv(pas_assignment_path, sep="\t")
+    ext_tx2le2gene = ext_tx2le2gene.merge(pas_assignment[["transcript_id",
+                                                          "pas_number",
+                                                          "pas_id"]],
+                                                          on="transcript_id")
+
+    # Remove genes with extensions from pas_assignment, concat with ext_tx2le2gene
+    upd_pas_assignment = pd.concat([pas_assignment[~pas_assignment["gene_id"].isin(ext_gene_ids)],
+                                    ext_tx2le2gene],
+                                    ignore_index=True)
+
+    upd_pas_assignment.to_csv(output_prefix + ".pas_assignment.tsv",
+                              header=True,
+                              index=False,
+                              sep="\t")
+
+    ## Create updated 'tx2le' file
+    not_ext_tx2le2gene = tx2le2gene[~tx2le2gene["gene_id"].isin(ext_gene_ids)]
+
+    upd_tx2le = pd.concat([not_ext_tx2le2gene[["le_id","transcript_id"]],
+                           ext_tx2le2gene[["le_id", "transcript_id"]]
+                           ], ignore_index=True)
+
+    upd_tx2le.drop_duplicates().to_csv(output_prefix + ".tx2le.tsv",
+                                       header=True,
+                                       index=False,
+                                       sep="\t")
+
+    ## Create updated 'le2gene' file
+    upd_le2gene = pd.concat([not_ext_tx2le2gene[["le_id","gene_id"]],
+                             ext_tx2le2gene[["le_id","gene_id"]]],
+                            ignore_index=True)
+
+    upd_le2gene.drop_duplicates().to_csv(output_prefix + ".le2gene.tsv",
+                                         header=True,
+                                         index=False,
+                                         sep="\t")
+
 
 if __name__ == '__main__':
 
