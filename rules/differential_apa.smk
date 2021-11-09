@@ -49,7 +49,8 @@ rule assign_tx_to_pas:
                                   "min_jnc_{min_jnc}",
                                   "min_frac_{min_frac}",
                                   "min_cov_{min_cov}",
-                                  "ref_merged")
+                                  "ref_merged"),
+        output_le = "--tx2le" if config["expression_merge_by"] == "last_exon" else ""
 
     conda:
         "../envs/papa.yaml"
@@ -71,6 +72,7 @@ rule assign_tx_to_pas:
         -g {params.group_key} \
         -t {params.tx_key} \
         -o {params.out_prefix} \
+        {params.output_le}
         2> {log}
         """
 
