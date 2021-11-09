@@ -249,8 +249,8 @@ def main(pas_assignment_path, tx2le_path, le2gene_path, match_stats_path, loci_p
     ## Create updated 'tx2le' file
     not_ext_tx2le2gene = tx2le2gene[~tx2le2gene["gene_id"].isin(ext_gene_ids)]
 
-    upd_tx2le = pd.concat([not_ext_tx2le2gene[["le_id","transcript_id"]],
-                           ext_tx2le2gene[["le_id", "transcript_id"]]
+    upd_tx2le = pd.concat([not_ext_tx2le2gene[["transcript_id", "le_id"]],
+                           ext_tx2le2gene[["transcript_id", "le_id"]]
                            ], ignore_index=True)
 
     upd_tx2le.drop_duplicates().to_csv(output_prefix + ".tx2le.tsv",

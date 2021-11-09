@@ -72,7 +72,7 @@ rule assign_tx_to_pas:
         -g {params.group_key} \
         -t {params.tx_key} \
         -o {params.out_prefix} \
-        {params.output_le}
+        {params.output_le} \
         2> {log}
         """
 
