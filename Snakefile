@@ -20,6 +20,9 @@ def param_list(param):
     return out
 
 
+assert config["expression_merge_by"] in ["polyA", "last_exon"], f"'expression_merge_by' must be one of 'polyA' or 'last_exon' - {config['expression_merge_by']} was passed"
+
+
 sample_tbl = pd.read_csv(config["sample_tbl"], index_col="sample_name")
 
 SAMPLES = sample_tbl.index.tolist()

@@ -295,9 +295,12 @@ rule three_end_filter:
         atlas = config["polya_site_atlas"]
 
     output:
-        os.path.join(STRINGTIE_SUBDIR,
-                     "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}",
-                     "tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf")
+        gtf = os.path.join(STRINGTIE_SUBDIR,
+                           "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}",
+                           "tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf"),
+        match_stats = os.path.join(STRINGTIE_SUBDIR,
+                                   "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}",
+                                   "tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.match_stats.tsv")
 
     params:
         script = "scripts/filter_tx_by_three_end.py",
@@ -351,11 +354,21 @@ rule merge_filtered_with_ref:
                      "tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf")
 
     output:
-        os.path.join(STRINGTIE_SUBDIR,
+        gtf = os.path.join(STRINGTIE_SUBDIR,
                      "min_jnc_{min_jnc}",
                      "min_frac_{min_frac}",
                      "min_cov_{min_cov}",
-                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf")
+                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf"),
+        loci = os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.loci"),
+        tracking = os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.tracking")
 
     params:
         ref_gtf = GTF,
