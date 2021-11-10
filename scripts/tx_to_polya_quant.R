@@ -68,23 +68,48 @@ txi.tx <- tximport(quant_paths,
 
 txi.pas <- summarizeToGene(txi.tx, tx2pas, countsFromAbundance = "lengthScaledTPM")
 
-# Add 'poly(A) site IDs to counts df
-pas_counts <- cbind(pas_id = rownames(txi.pas$counts), as.data.frame(txi.pas$counts))
 
+
+# Add 'poly(A) site IDs to counts df
+# could be pas_id or le_id depending on input file type
+isoform_id_col <- colnames(tx2pas)[-1]
+message(paste("isoform ID column:", isoform_id_col, sep=" "))
+
+pas_counts <- cbind(rownames(txi.pas$counts), as.data.frame(txi.pas$counts))
+# print(head(pas_counts))
+colnames(pas_counts) <- c(isoform_id_col, colnames(as.data.frame(txi.pas$counts)))
+
+# print(head(pas_counts))
 # Return gene ID to to counts df (so have polyASite ID & gene IDs to group events)
 # gsub("_[0-9]+$", "", head(pas_counts$pas_id))
 
+# print("tx2gene")
+# print(head(tx2gene))
+# print("tx2pas")
+# print(head(tx2pas))
+
+message("Adding gene ID to counts df...")
+
+iso2gene <- merge(tx2gene, tx2pas, by = "transcript_id")[,c("gene_id", isoform_id_col)]
+# print(head(iso2gene))
+
+# print(head(pas_counts))
+# print(colnames(pas_counts))
 pas_counts <- merge(pas_counts,
-                    merge(tx2gene, tx2pas, by = "transcript_id")[,c("pas_id", "gene_id")],
-                    by = "pas_id")
+                    iso2gene,
+                    by = isoform_id_col)
+
+# print(head(pas_counts))
 
 # reorder so pas_id | gene_id are the first two columns
 pas_counts <- pas_counts[, c(1, ncol(pas_counts), seq(2, ncol(pas_counts) - 1, 1))]
 
 # Just in case, remove duplicate pas_id rows from matrix
-pas_counts <- pas_counts[!duplicated(pas_counts$pas_id), ]
+pas_counts <- pas_counts[!duplicated(pas_counts[, isoform_id_col]), ]
 
 # "data/tximport_pas_quantification.tsv"
+message(paste("Writing transcript counts file to -", opt$output_file, sep = " "))
+
 write.table(pas_counts,
             file = opt$output_file,
             sep = "\t",
@@ -92,10 +117,3 @@ write.table(pas_counts,
             col.names = TRUE,
             row.names = FALSE)
 
-
-
-
-# input:
-# tx2pas dataframe output by assign_tx_to_pas.py
-# Directory storing Salmon quantification
-# Input sample table from pipeline
