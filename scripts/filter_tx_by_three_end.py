@@ -137,6 +137,24 @@ def nearest_atlas_site(gr_3p,
     return gr_3p_nr
 
 
+def _complement_seq(df, seq_col="seq"):
+    '''
+    Complement sequence in Seq objects if region found on minus strand
+    Use internally inside a pr.assign/apply
+    Returns a Series of Seq objects (unmodified if on plus strand, complemented if on minus)
+    '''
+    if (df["Strand"] == "+").all():
+
+        return df[seq_col]
+
+    elif (df["Strand"] == "-").all():
+
+        return df[seq_col].apply(lambda seq: seq.complement())
+
+    else:
+        raise ValueError("Invalid value in 'Strand' column for df - must be one of '+' or '-'")
+
+
 def find_pas_motifs(gr,
                     pas_motifs,
                     seq_col="seq",
@@ -258,6 +276,11 @@ def main(gtf_path,
     # Add to gr
     le_polya.seq = three_end_seqs
 
+    # Complement sequences on minus strand to match pas motifs
+    eprint("Complementing region sequences on minus strand to match plus strand-oriented PAS motifs...")
+
+    le_polya = le_polya.assign("seq",
+                               lambda df: _complement_seq(df))
 
     #C - Search for presence of any of provided motifs in last x nt of Txs
     # Returns col with binary found/not_found (1/0) & motif-seq + position
@@ -413,7 +436,7 @@ if __name__ == '__main__':
                         required=True,
                         default=argparse.SUPPRESS,
                         help="polyA signal motifs defined by Gruber 2016 (PolyASite v1.0, 'Gruber', 18 motifs)" +
-                             "or Beaudong 2000 ('Beaudong', 12 motifs (all of which recaptured by Gruber)). " +
+                             " or Beaudong 2000 ('Beaudong', 12 motifs (all of which recaptured by Gruber)). " +
                              "Path to TXT file containing PAS motifs (DNA, one per line) can also be supplied")
 
     parser.add_argument("-m","--max-atlas-distance",
