@@ -198,7 +198,7 @@ def get_terminal_regions(gr,
     return out_gr
 
 
-def _df_add_region_number(df,id_col):
+def _df_add_region_number(df,id_col,sort_col="Start"):
     '''
     Return a Series of strand-aware region numbers (5'-3' in 1..n)
     Function to be used internally in a pr.assign (mainly by add_region_number)
@@ -209,12 +209,12 @@ def _df_add_region_number(df,id_col):
     elif (df.Strand == "+").all():
         # Start position smallest to largest = 5'-3'
 
-        return df.groupby(id_col)["Start"].rank(method="min", ascending=True)
+        return df.groupby(id_col)[sort_col].rank(method="min", ascending=True)
 
     elif (df.Strand == "-").all():
         # Start position largest to smallest = 5'-3'
 
-        return df.groupby(id_col)["Start"].rank(method="min", ascending=False)
+        return df.groupby(id_col)[sort_col].rank(method="min", ascending=False)
 
     elif df.empty:
         eprint("df is empty - returning empty pd.Series")

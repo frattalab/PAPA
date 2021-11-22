@@ -1,0 +1,225 @@
+
+
+rule assign_tx_to_pas:
+    input:
+        os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf")
+
+    output:
+        tx2pas = os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "ref_merged.tx2pas.tsv"),
+        tx2gene = os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "ref_merged.tx2gene.tsv"),
+        pas2gene = os.path.join(STRINGTIE_SUBDIR,
+                                "min_jnc_{min_jnc}",
+                                "min_frac_{min_frac}",
+                                "min_cov_{min_cov}",
+                                "ref_merged.pas2gene.tsv"),
+        pas_le_df = os.path.join(STRINGTIE_SUBDIR,
+                               "min_jnc_{min_jnc}",
+                               "min_frac_{min_frac}",
+                               "min_cov_{min_cov}",
+                               "ref_merged.pas_assignment.tsv"),
+        tx2le = os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "ref_merged.tx2le.tsv") if config["expression_merge_by"] == "last_exon" else [],
+        le2gene = os.path.join(STRINGTIE_SUBDIR,
+                                "min_jnc_{min_jnc}",
+                                "min_frac_{min_frac}",
+                                "min_cov_{min_cov}",
+                                "ref_merged.le2gene.tsv") if config["expression_merge_by"] == "last_exon" else []
+
+    params:
+        script = "scripts/assign_tx_to_pas.py",
+        merge_window = config["pas_merge_window_size"],
+        group_key = "gene_id",
+        tx_key = "transcript_id",
+        out_prefix = os.path.join(STRINGTIE_SUBDIR,
+                                  "min_jnc_{min_jnc}",
+                                  "min_frac_{min_frac}",
+                                  "min_cov_{min_cov}",
+                                  "ref_merged"),
+        output_le = "--tx2le" if config["expression_merge_by"] == "last_exon" else ""
+
+    conda:
+        "../envs/papa.yaml"
+
+    log:
+        os.path.join(LOG_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "assign_tx_to_pas.log")
+
+    group:
+        "tx_to_per_polya_site_quant"
+
+    shell:
+        """
+        python {params.script} -i {input} \
+        -w {params.merge_window} \
+        -g {params.group_key} \
+        -t {params.tx_key} \
+        -o {params.out_prefix} \
+        {params.output_le} \
+        2> {log}
+        """
+
+
+rule update_extension_le_ids:
+    input:
+        tx2le = os.path.join(STRINGTIE_SUBDIR,
+                             "min_jnc_{min_jnc}",
+                             "min_frac_{min_frac}",
+                             "min_cov_{min_cov}",
+                             "ref_merged.tx2le.tsv"),
+        le2gene = os.path.join(STRINGTIE_SUBDIR,
+                                "min_jnc_{min_jnc}",
+                                "min_frac_{min_frac}",
+                                "min_cov_{min_cov}",
+                                "ref_merged.le2gene.tsv"),
+        pas_le_df = os.path.join(STRINGTIE_SUBDIR,
+                                 "min_jnc_{min_jnc}",
+                                 "min_frac_{min_frac}",
+                                 "min_cov_{min_cov}",
+                                 "ref_merged.pas_assignment.tsv"),
+        match_stats_3p = os.path.join(STRINGTIE_SUBDIR,
+                                      "min_jnc_{min_jnc}",
+                                      "min_frac_{min_frac}",
+                                      "min_cov_{min_cov}",
+                                      "tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.match_stats.tsv"),
+        loci = os.path.join(STRINGTIE_SUBDIR,
+                            "min_jnc_{min_jnc}",
+                            "min_frac_{min_frac}",
+                            "min_cov_{min_cov}",
+                            "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.loci"),
+        tracking = os.path.join(STRINGTIE_SUBDIR,
+                                "min_jnc_{min_jnc}",
+                                "min_frac_{min_frac}",
+                                "min_cov_{min_cov}",
+                                "ref_merged.tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.tracking")
+
+    output:
+        upd_tx2le = os.path.join(STRINGTIE_SUBDIR,
+                             "min_jnc_{min_jnc}",
+                             "min_frac_{min_frac}",
+                             "min_cov_{min_cov}",
+                             "ref_merged_upd_ext_ids.tx2le.tsv"),
+
+        upd_le2gene = os.path.join(STRINGTIE_SUBDIR,
+                                   "min_jnc_{min_jnc}",
+                                   "min_frac_{min_frac}",
+                                   "min_cov_{min_cov}",
+                                   "ref_merged_upd_ext_ids.le2gene.tsv"),
+
+
+    params:
+        script = "scripts/update_extension_le_assignment.py",
+        output_prefix = os.path.join(STRINGTIE_SUBDIR,
+                                     "min_jnc_{min_jnc}",
+                                     "min_frac_{min_frac}",
+                                     "min_cov_{min_cov}",
+                                     "ref_merged_upd_ext_ids"),
+
+    conda:
+        "../envs/papa.yaml"
+
+    log:
+        os.path.join(LOG_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "update_extension_le_ids.log")
+
+    group:
+        "tx_to_per_polya_site_quant"
+
+    shell:
+        """
+        python {params.script} \
+        -a {input.pas_le_df} \
+        -t {input.tx2le} \
+        -g {input.le2gene} \
+        -m {input.match_stats_3p} \
+        -l {input.loci} \
+        --tracking {input.tracking} \
+        -o {params.output_prefix} \
+        2> {log}
+        """
+
+
+rule tx_to_polya_quant:
+    input:
+        tx2pas = os.path.join(STRINGTIE_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "ref_merged.tx2pas.tsv") if config["expression_merge_by"] == "polyA" else os.path.join(STRINGTIE_SUBDIR,
+                                                                                                            "min_jnc_{min_jnc}",
+                                                                                                            "min_frac_{min_frac}",
+                                                                                                            "min_cov_{min_cov}",
+                                                                                                            "ref_merged_upd_ext_ids.tx2le.tsv"),
+        tx2gene = os.path.join(STRINGTIE_SUBDIR,
+                               "min_jnc_{min_jnc}",
+                               "min_frac_{min_frac}",
+                               "min_cov_{min_cov}",
+                               "ref_merged.tx2gene.tsv"),
+        quant = expand(os.path.join(SALMON_SUBDIR,
+                                    "quant",
+                                    "min_jnc_{{min_jnc}}",
+                                    "min_frac_{{min_frac}}",
+                                    "min_cov_{{min_cov}}",
+                                    "{sample}", "quant.sf"),
+                       sample=SAMPLES)
+
+    output:
+        os.path.join(SALMON_SUBDIR,
+                     "pas_quant",
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "summarised_pas_quantification.tsv")
+
+    params:
+        script = "scripts/tx_to_polya_quant.R",
+        sample_tbl = config["sample_tbl"],
+        salmon_dir = os.path.join(SALMON_SUBDIR,
+                                  "quant",
+                                  "min_jnc_{min_jnc}",
+                                  "min_frac_{min_frac}",
+                                  "min_cov_{min_cov}")
+
+    conda:
+        "../envs/papa_r.yaml"
+
+    log:
+        os.path.join(LOG_SUBDIR,
+                     "min_jnc_{min_jnc}",
+                     "min_frac_{min_frac}",
+                     "min_cov_{min_cov}",
+                     "tx_to_polya_quant.log")
+
+    group:
+        "tx_to_per_polya_site_quant"
+
+    shell:
+        """
+        Rscript {params.script} \
+        -s {params.sample_tbl} \
+        -d {params.salmon_dir} \
+        -t {input.tx2pas} \
+        -g {input.tx2gene} \
+        -o {output} \
+        2> {log}
+        """

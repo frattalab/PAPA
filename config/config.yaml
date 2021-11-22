@@ -1,22 +1,19 @@
+#####-----------------------------------------
+### INPUT FILES and DATASET PARMETERS
+#####-----------------------------------------
 
+# Path to main (top-level) output directory storing results for this run
 #MUST END WITH SLASH
 main_output_dir: 2021-08-23_two_sample_example_output/
 
+# PATH to CSV sample table linking samples to corresponding BAM, FASTQ files etc.
+# 1 row per sample, 4 columns ('<column name>': <description>):
+# 'sample_name': unique identifier for sample
+# 'condition': key to group samples of the same condition of interest (e.g. ‘control’ or ‘knockdown’)
+# 'path': path to BAM file containing aligned reads for given sample. BAM files should be coordinate sorted and have a corresponding BAI index file at the same location (suffixed with ‘.bai’)
+# 'fastq1`': path to FASTQ file storing 1st mates of read pairs aligned for same sample
+# 'fastq2': path to FASTQ file storing 2nd mates of read pairs aligned for same sample
 sample_tbl: config/local_ward_ipsc_example_sample_tbl.csv
-
-annotation_gtf: data/annotation/gencode.v34.annotation.gtf
-
-# One of 'gencode' if GENCODE or "ensembl" for ENSEMBL other string
-# Used for Salmon index &
-# scripts/filter_tx_by_intron_chain.py (for gene type filtering)
-annotation_source: "gencode"
-
-# An index file should also exist in same directory (suffixed with .fai)
-# Can be generated using samtools faidx
-genome_fasta: data/annotation/genome.fa
-
-# Put "none" for now. Other options possibly added in future...
-pre_stringtie_processing: "none"
 
 # What is strandedness of library prep used in samples?
 # "--rf" - library is stranded with read 2 corresponding to transcribed strand ('fr-firststrand'/ 'reverse')
@@ -27,21 +24,111 @@ pre_stringtie_processing: "none"
 # https://littlebitofdata.com/en/2017/08/strandness_in_rnaseq/
 strandedness: "--rf"
 
-salmon_index_threads: 2
-salmon_quant_threads: 2
+# Path to GTF file of reference transcripts. Used to:
+# - Guide StringTie transcript assembly
+# - Match assembled transcripts to known splice junctions
+# - Quantify reference transcripts with Salmon
+annotation_gtf: data/annotation/gencode.v34.annotation.gtf
 
-salmon_kmer_size: 31
+# Source of GTF file of reference transcripts ('annotation_gtf')
+# One of 'gencode' if GENCODE or "ensembl" for ENSEMBL other string
+# Used for Salmon index & scripts/filter_tx_by_intron_chain.py (for gene type filtering)
+annotation_source: "gencode"
 
-####------
-## Stringtie options/parameters
-####------
+# Path to FASTA file containing genome sequence
+# An index file should also exist in same directory (suffixed with .fai)
+# Can be generated using samtools faidx
+genome_fasta: data/annotation/genome.fa
+
+# Path to BED file containing reference poly(A) site database
+# e.g. PolyASite atlas from 3'-end sequencing
+polya_site_atlas: data/annotation/atlas.clusters.2.0.GRCh38.96.chr_prefix.bed
+
+#####-----------------------------------------
+### GENERAL PIPELINE PARAMETERS
+#####-----------------------------------------
+
+# Whether to perform additional processing of BAM files prior to transcript assembly with StringTie
+# Put "none" for now. Other options possibly added in future...
+pre_stringtie_processing: "none"
+
+###
+# Expression filtering
+###
+
+# Minimum mean TPM value across samples of the same condition for an assembled transcript to be retained
+# Proposed to considerably improve transcript accuracy (Bioxriv pre-print from Swamy et al.; 2020)
+# Default: 1
+min_mean_tpm: 1
+
+###
+# Splice junction matching/filtering
+###
+
+# when filtering assembled transcripts, valid should have intron chain match up until penultimate intron(s)
+# 'transcript' - NOT YET IMPLEMENTED - introns/splice junctions come from the same transcript
+# 'any' - matching introns/splice junctions can come from any transcript
+intron_chain_filter_mode: "any"
+
+# Max number of consective 3'end non-matched introns for a transcript to be considered valid
+# Default: 2 (equivalent to allowing the penultimate exon of transcript to also be novel)
+max_terminal_non_match: 2
+
+# Minimum length of 3'end extension for novel 3'UTR extension events to be retained
+# Applied to 'internal_exon_bleedthrough' & 'ds_3utr_extension' events
+# Default: 100
+min_extension_length: 100
+
+# Number of threads/cpus for scripts/filter_tx_by_intron_chain.py
+# Default: 1
+intron_chain_filter_threads: 1
+
+###
+# 3'end transcript filtering
+###
+
+# Maximum distance between predicted 3'end and nearest polya_site_atlas site for a transcript to be retained
+max_atlas_distance: 100
+
+# Length of region from 3'end (to upstream) to search for presence of polyA signal motifs
+motif_search_region_length: 100
+
+# Which poly(A) signal motifs to use to retain 3'ends with evidence of genuine cleavage event
+# 'Gruber' - 18 conserved motifs (mouse and human) identified by Gruber et al., 2016
+# 'Beaudoing' - 12 conserved motifs identified by Beaudoing 2000 (all of which also identified by Gruber 2016)
+# Path to TXT file of custom (DNA) PAS motifs, one per-line
+polya_signal_motifs: "Gruber"
+
+
+###
+# Summarising polyA site expression
+###
+
+# How to summarise transcript abundance to polyA site isoforms for each gene
+# 'polyA' - sum expression of transcripts if they share a poly(A) site
+# 'last_exon' - sum expression if they share a last exon (any overlap). 3'UTR extension events will be considered as separate last exons
+expression_merge_by: "last_exon"
+
+# Target window size (nt) for merging closely spaced polyA sites to a single polyA cluster
+# Window is centred on 3'end of each transcripts -
+# PyRanges considers polyA sites as 1nt length intervals
+# pas_merge_window_size - 1 is extended EITHER direction of each polyA site
+pas_merge_window_size: 25
+
+
+
+#####-----------------------------------------
+## STRINGTIE OPTIONS/PARAMETERS
+#####-----------------------------------------
 
 
 # Path to df containing Stringtie parameter values to try (1 combo per row)
 # -j, -f, -c, -t are defined here
+# NOT YET IMPLEMENTED - IGNORE THIS
 stringtie_params_csv: config/stringtie_params.csv
 
 # Use annotated poly(A) sites to help guide transcript assembly?
+# activates '--ptf' option
 # put True if yes, False if no (NO QUOTES around True/False)
 use_point_features: False
 
@@ -51,34 +138,9 @@ use_point_features: False
 # Only needed if use_point_features is set to True
 point_features_path: data/atlas.cluster.2.0.GRCh38.96_point_features.chr_prefix.tsv
 
-# 'any' or 'transcript'
-# when filtering assembled transcripts, valid should have intron chain match up until penultimate intron
-# Should these introns come from the same transcript ('transcript') i.e. only differs in last exon
-# Or should these introns be able to come from any transcript ('any')?
-intron_chain_filter_mode: "any"
-
-# Maximum number of consective 3'end non-matched introns for a transcript to be considered valid
-# Default: 2 (equivalent to allowing the penultimate exon of transcript to also be novel)
-max_terminal_non_match: 2
-
-# Number of threads/cpus for scripts/filter_tx_by_intron_chain.py
-# Default: 1
-intron_chain_filter_threads: 1
-
-# Minimum length of 3'end extension for novel 3'UTR extension events to be retained
-# Applied to 'internal_exon_bleedthrough' & 'ds_3utr_extension' events
-# Default: 100
-min_extension_length: 100
-
-# Minimum mean TPM value across samples of the same condition for an assembled transcript to be retained
-# Proposed to considerably improve transcript accuracy (Bioxriv pre-print from Swamy et al.; 2020)
-# Default: 1
-min_mean_tpm: 1
-
-
 # Default: 0.01
 # can be a single value between 0-1 or a list of values [val1, val2]
-min_isoform_fraction_abundance: [0.01, 0.05]
+min_isoform_fraction_abundance: 0.01
 
 # Default: 200
 min_isoform_length: 200
@@ -91,8 +153,9 @@ gene_abundances_suffix: ".gene_abundances.tsv"
 
 # True or False (NO QUOTES)
 # StringTie Default: False
-# PAPA Default: True
-report_covered_annot_txipts: True
+# PAPA Default: False
+# Note: this is currently broken if multiple StringTie parameter combos are defined
+report_covered_annot_txipts: False
 covered_txipts_suffix: ".annotated.fully_covered.gtf"
 
 # Junctions should have spliced reads aligning with at least X overhang on either side
@@ -106,7 +169,7 @@ min_junction_overhang: 10
 # float
 # can be a single value starting from 1 or a list of values [val1, val2]
 # Default: 1
-min_junction_reads: [1,5]
+min_junction_reads: 1
 
 # Trim ends of assembled transcripts based on sudden drops in coverage?
 # controls whether <-t> flag is passed
@@ -118,7 +181,7 @@ disable_end_trimming: False
 # float
 # can be a single value starting from 1 or a list of values [val1, val2]
 # Default: 1
-min_txipt_coverage: [1,1.5]
+min_txipt_coverage: 1
 
 # Minimum coverage for single-exon predicted transcripts
 # float
@@ -145,14 +208,8 @@ max_fraction_multi_mapped: 0.95
 # String
 label: "PAPA"
 
-# Stringtie reports assembled transcripts matching reference transcripts in its assembled GTF
-# Since these can't be novel they can be ignored for transcript filtering/analysis
-# DEPRECATED - 3'UTR EXTENSIONS AND BLEEDTHROUGH EVENTS APPEAR TO BE ASSIGNED REFERENCE_ID
-
-stringtie_ref_string: "reference_id"
-
 # Merge parameters
-
+# I think these are no longer used...
 min_length_merge: 50
 min_cov_merge: 0
 min_fpkm_merge: 0
@@ -163,9 +220,26 @@ min_iso_frac_merge: 0.01
 keep_retained_introns_merge: False
 
 
-####
-# Names of subdirectories for individual steps. No need to change these unless you don't like them!
-####
+
+#####-----------------------------------------
+### SALMON OPTIONS/PARAMETERS
+#####-----------------------------------------
+
+salmon_index_threads: 2
+
+salmon_quant_threads: 2
+
+salmon_kmer_size: 31
+
+
+
+#####-----------------------------------------
+# OUTPUT SUBDIRECTORY NAMES
+#####-----------------------------------------
+
+# No need to change these unless you don't like them!
+
 stringtie_subdir_name: stringtie/
 salmon_subdir_name: salmon/
 logs_subdir_name: logs/
+diff_apa_subdir_name: differential_apa/
