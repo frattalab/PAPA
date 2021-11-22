@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+Beaudoing#!/usr/bin/env python3
 
 import pyranges as pr
 import pandas as pd
@@ -28,7 +28,7 @@ Check whether:
     should provide evidence that a genuine cleavage event is happening in this region
     (even if StringTie doesn't get precise cleavage site right)
     - e.g. 1/18 positionally enriched motifs discovered by Gruber et al., 2016 (PolyASite v1.0))
-    or 12 discovered by Beaudong 2000 (all of which captured by Gruber et al., 2016). All of these motifs are
+    or 12 discovered by Beaudoing 2000 (all of which captured by Gruber et al., 2016). All of these motifs are
     conserved in human and mouse.
 
 Intron-chain filtered transcripts that pass either of these two filters are retained for further analysis
@@ -39,7 +39,7 @@ The script takes as input:
     - Only include event types that involve a polyadenylation event (e.g. exclude 3'UTR introns - these are by default reported in output)
 - BED file of reference poly(A) sites (e.g. from PolyASite atlas)
 - PAS motifs
-    - 'Gruber' (18 from Gruber 2016) and 'Beaudong' (12 from Beaudong 2000) are built into script.
+    - 'Gruber' (18 from Gruber 2016) and 'Beaudoing' (12 from Beaudoing 2000) are built into script.
     - A TXT file of (DNA) motifs, one per-line, can also be supplied
 - Max distance to nearest polyA site (int)
 - Upstream region length for PAS motif searching (int)
@@ -51,7 +51,7 @@ The script outputs:
     - PAS motifs found and their location relative to 3'end
 '''
 
-beaudong_pas_motifs = """AATAAA
+beaudoing_pas_motifs = """AATAAA
 ATTAAA
 TATAAA
 AGTAAA
@@ -436,7 +436,7 @@ if __name__ == '__main__':
                         required=True,
                         default=argparse.SUPPRESS,
                         help="polyA signal motifs defined by Gruber 2016 (PolyASite v1.0, 'Gruber', 18 motifs)" +
-                             " or Beaudong 2000 ('Beaudong', 12 motifs (all of which recaptured by Gruber)). " +
+                             " or Beaudoing 2000 ('Beaudoing', 12 motifs (all of which recaptured by Gruber)). " +
                              "Path to TXT file containing PAS motifs (DNA, one per line) can also be supplied")
 
     parser.add_argument("-m","--max-atlas-distance",
@@ -465,8 +465,8 @@ if __name__ == '__main__':
     if args.motifs.capitalize() == "Gruber":
         pas_motifs = gruber_pas_motifs
 
-    elif args.motifs.capitalize() == "Beaudong":
-        pas_motifs = beaudong_pas_motifs
+    elif args.motifs.capitalize() == "Beaudoing":
+        pas_motifs = Beaudoing_pas_motifs
 
     elif os.path.exists(args.motifs):
         eprint(f"reading in pas motifs from file - {args.motifs}")
@@ -476,7 +476,7 @@ if __name__ == '__main__':
         eprint(f"pas motifs {', '.join(pas_motifs)}")
 
     else:
-        raise ValueError(f"-p/--pas-motifs argument invalid - must be one of 'Gruber', 'Beaudong' or a valid path to TXT file. You passed {args.motifs}")
+        raise ValueError(f"-p/--pas-motifs argument invalid - must be one of 'Gruber', 'Beaudoing' or a valid path to TXT file. You passed {args.motifs}")
 
 
     main(args.input_gtf,
