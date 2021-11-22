@@ -4,7 +4,7 @@ Snakemake pipeline for detection & quantification of novel last exons/polyadenyl
 
 The workflow is as follows:
 - Use [StringTie](https://github.com/gpertea/stringtie) to assemble transcripts from aligned RNA-seq reads
-- Filter assembled transcripts for minimum mean expression across samples of the same condition
+- Filter assembled transcripts for minimum mean expression across samples of the same condition ([Bioxriv preprint - Swamy et al., 2020](https://doi.org/10.1101/2020.08.21.261644))
 - Filter assembled transcripts for those with splice junctions matching any reference junction up until the penultimate junction (spliced last exons) or all junctions (extension last exons)
 - Filter assembled transcripts for last exons with nearby reference polyA site (e.g. PolyASite) or conserved polyA signal motif (e.g. 18 defined in [Gruber et al., 2016](https://doi.org/10.1101/gr.202432.115))
 - Merge novel last exon isoforms with reference annotation, quantify transcripts with Salmon
