@@ -78,6 +78,11 @@ if __name__ == '__main__':
 
     start = timer()
 
+    if len(sys.argv) == 1:
+        eprint("Usage information")
+        eprint("python gene_names_from_tracking.py <prefix>.tracking <prefix>.tx2le.tsv <output_path>")
+        sys.exit(0)
+
     tracking_path = sys.argv[1]
     tx2le_path = sys.argv[2]
     out_path = sys.argv[3]
