@@ -1,4 +1,5 @@
 import pyranges as pr
+import numpy as np
 import pandas as pd
 import sys
 from functools import reduce
@@ -11,8 +12,14 @@ import operator
 
 def _subset_membership(gr, col_name, filter_tuple):
     '''
+    Subset PyRanges object over a specific column to retain rows with value in specified list/set
+
+    gr: PyRanges object
+    col_name: name of column in gr on which to apply filtering
+    filter_tuple: 2-element tuple, 1st being list/set of values to check for membership, 2nd being one of 'isin' (retained if value in list/set) or '~isin' (retained if value not in list/set)
     '''
 
+    assert isinstance(gr, pr.PyRanges)
     assert isinstance(filter_tuple[0], list) or isinstance(filter_tuple[0], set)
     assert filter_tuple[1] in ["isin", "~isin"]
 
@@ -26,7 +33,15 @@ def _subset_membership(gr, col_name, filter_tuple):
 
 def _subset_equality(gr, col_name, filter_tuple):
     '''
+    Subset PyRanges object over a specific column for equality, greater than/less than operations
+
+    gr: PyRanges object
+    col_name: name of column in gr on which to apply filtering
+    filter_tuple: 2-element tuple, first being value to check in column, 2nd being an comparison function from the operator base module
+    e.g. _subset_gr(gr, "gene_type", ("protein_coding", operator.eq))
     '''
+    assert isinstance(gr, pr.PyRanges)
+    assert col_name in gr.columns
 
     return gr.subset(lambda df: filter_tuple[1](df[col_name], filter_tuple[0]))
 
@@ -35,6 +50,7 @@ def _subset_gr(gr, col_name, filter_tuple):
     '''
     '''
 
+    assert isinstance(gr, pr.PyRanges)
     assert col_name in gr.columns
 
     if isinstance(filter_tuple[1], str):
@@ -54,6 +70,7 @@ def _subset_gr_and(gr,
     '''
     '''
 
+    assert isinstance(gr, pr.PyRanges)
     assert col_name_1 in gr.columns
     assert col_name_2 in gr.columns
 
@@ -72,7 +89,7 @@ def _subset_gr_and(gr,
 
 def filter_gtf_attributes(gr, gene_types,tr_types=None):
     '''
-    Filter PyRanges with multi-level, group-specific filtering schemes given column/attribute values
+    Filter PyRanges with two-level, group-specific filtering schemes given column/attribute values
 
     gr: PyRanges object
 
@@ -82,28 +99,33 @@ def filter_gtf_attributes(gr, gene_types,tr_types=None):
             - return_true can be an operator (from operator base module) or
             one of ['isin', '~isin'] (to test for membership)
 
-    tr_types: optional dict of {'column_name': {'gene_type_value_list[0]': (value, return_true)}} for value-specific filtering for values in gene_types {col: (['a','b'], 'isin')}
+    tr_types: optional dict of {'subgroup_key': {'column_name': (value, return_true)}} for value-specific filtering of values in gene_types {col: (['a','b'], 'isin')}
         e.g. if my gene_types dict had {col: (['a','b'], 'isin')}
         You can specify additional filters for group 'a' (and/or 'b') in tr_types
-        using same structure as above
+        keys of tr_types must be present in a list/set defined in 1st element of gene_types values (the filter_tuple)
+
 
     e.g. I want to extract 'protein_coding' & 'lncRNA' gene_types ('gene_type' GTF attribute key)
+    and 'transcript' fields only ('Feature' key (3rd field in GTF))
     for 'protein_coding' gene types, I want to extract TSL 1 transcripts ('transcript_support_level' attribute key)
     filter_gtf_attributes(gr,
-                          gene_types={'gene_type': (['protein_coding', lncRNA], 'isin')
+                          gene_types={'Feature': ('transcript', operator.eq),
+                                      'gene_type': (['protein_coding', lncRNA], 'isin'),
                                       },
-                          tr_types={'transcript_support_level': {'protein_coding': (1, '=='),
-                                                                 }
+                          tr_types={'protein_coding': {'transcript_support_level': (1, operator.eq),
+                                                       }
                                     }
                           )
 
     Notes:
-    - not every key in gene_types needs to have additional filters defined
-    - tr_types only becomes active if at least 1 of tuple[0] (value) in gene_types.values() is a list.
+    - Not every key in gene_types needs to have additional filters defined
+    - tr_types only becomes active if at least 1 of tuple[0] (value) in gene_types.values() is a list/set.
         - If you have multiple filters but no 'group-specific' filters, put all of your filters in gene_types dict
+    - Filters are applied iteratively (i.e. consider multiple filters in the same dict as 'AND' conditions)
 
 
     '''
+    assert isinstance(gr, pr.PyRanges)
     assert isinstance(gene_types, dict)
 
     # Apply each 'top-level' filter defined in gene_types
@@ -123,65 +145,58 @@ def filter_gtf_attributes(gr, gene_types,tr_types=None):
                         if isinstance(val[0], list) or isinstance(val[0], set)
                         }
 
-        # Which values from gene_types filters (values, filter_true) are undergoing additional filters?
-        tr_type_keys = [tr_key for tr_dict in tr_types.values() for tr_key in tr_dict.keys()]
-        # print(tr_type_keys)
+        # Double check can find group-specific filter in gene_types dict ('top level' filter)
+        # Otherwise will be filtering for keys that don't exist in gr
+        # Also create dict of {'tr_type': 'gene_type_col'}
+        tt2gene_col = {}
 
+        for key in tr_types.keys():
+            found = False
+            for gt_col, filter_tuple in gene_types_l.items():
+                if key in filter_tuple[0]:
+                    found = True
+                    tt2gene_col[key] = gt_col
+
+                else:
+                    continue
+
+            if not found:
+                raise Exception(f"tr_types subgroup key - {key} - not found in gene_types dict. To undergo group specific filtering must filter for this group first")
+
+        # print(tr_type_keys)
         gr_list = []
 
-        # Every column level filter in tr_types
-        for tt_col, tt_dict in tr_types.items():
-            #
-            for tt_key, tt_tuple in tt_dict.items():
-                # Check each key: val in gene_types_l -
-                # tt_key should be in one of these gene_types_l.values() tuples
-                found = False
-                for gt_col, gt_tuple in gene_types_l.items():
-                    if tt_key in gt_tuple[0]:
+        # 1st - find set of top level keys (gene_types) that are not sent for additional filtering
+        # i.e. values in lists of gene_types tuples that aren't in tr_types.keys()
+        # Subset gr for these values and add to gr_list to save in final output
+        for col, filter_tuple in gene_types_l.items():
+            for ele in filter_tuple[0]:
+                if ele in tr_types.keys():
 
-                        tt_gr = _subset_gr_and(gr2,
-                                               # Name of col containing nested dict key
-                                               col_name_1=gt_col,
-                                               # Nested dict key
-                                               filter_tuple_1=(tt_key, operator.eq),
-                                               col_name_2=tt_col,
-                                               filter_tuple_2=tt_tuple)
+                    continue
 
-                        # print(f"this is subset gr for {tt_key}\n{tt_col}\n{tt_tuple}")
-                        # print(tt_gr[[tt_col, gt_col]])
-                        # print("this is the col of interest")
-                        # print(tt_gr.as_df()[tt_col].value_counts())
+                else:
+                    # won't undergo extra filtering, need to save unmodified
+                    save_gr = _subset_gr(gr2, col, (ele, operator.eq))
+                    gr_list.append(save_gr)
 
-                        gr_list.append(tt_gr)
 
-                        found = True
+        # Now perform group-specific filters
+        for key, filter_dict in tr_types.items():
+            # Subset for group rows defined in top-level (gene_type) filter
+            gr_tt = _subset_gr(gr2,
+                               tt2gene_col[key],
+                               (key, operator.eq)
+                               )
 
-                        # Need to check if all values in that column are also in tt_dict.keys()
-                        # Otherwise will be filtered out at this step even though don't want a second filter
-                        # This just keeps all rows satisfying the top level filteriing criteria
+            gr_tt_f = reduce(lambda gr, col: _subset_gr(gr, col, filter_dict[col]),
+                             filter_dict.keys(),
+                             gr_tt)
 
-                        no_filt_list = [_subset_gr(gr2,
-                                                   gt_col,
-                                                   (ele, operator.eq)
-                                                   )
-                                        for ele in gt_tuple[0]
-                                        if ele not in tr_type_keys]
-                        #
-                        # print(f"n without extra filter - {len(no_filt_list)}")
-                        # print(no_filt_list)
+            gr_list.append(gr_tt_f)
 
-                        gr_list.extend(no_filt_list)
-
-                    else:
-                        # Try next column: (filter tuple) in gene_types
-                        continue
-
-                # Have checked every filter defined in gene_types, this key is not present
-                if not found:
-                    raise Exception(f"{tt_key} must be present in the values (1st element of tuple) of gene_types dict")
 
         return pr.concat(gr_list)
-
 
 
 if __name__ == '__main__':
@@ -237,9 +252,9 @@ if __name__ == '__main__':
 
     print("Trying protein-coding or lncRNA, transcript rows only plus extract protein-coding transcripts for protein-coding genes, lncRNA txipts for lncRNAs only")
 
-    pc_only_tt = {"transcript_type": {"protein_coding": ("protein_coding", operator.eq),
-                                      "lncRNA": ("lncRNA", operator.eq)
-                                      }
+    pc_only_tt = {"protein_coding": {"transcript_type": ("protein_coding", operator.eq)},
+                  "lncRNA": {"transcript_type": ("lncRNA", operator.eq)
+                             }
                   }
 
     pc_lnc_gt["Feature"] = ("transcript", operator.eq)
@@ -265,4 +280,19 @@ if __name__ == '__main__':
 
     print(f"N unique txipts\n{y.as_df()[['gene_type', 'transcript_id']].groupby('gene_type').nunique()}")
 
-    
+
+    print("\n TRY ABOVE PLUS TSL FILTERING FOR PC TRANSCRIPTS\n")
+
+    pc_only_tt["protein_coding"]["transcript_support_level"] = (3, operator.le)
+
+    gtf.transcript_support_level = gtf.transcript_support_level.replace("NA", np.nan).astype(float)
+
+    print("This is transcript type filtering \n")
+    print(pc_only_tt)
+
+    z = filter_gtf_attributes(gtf, pc_lnc_gt, pc_only_tt)[["Feature", "transcript_id", "gene_type", "transcript_type", "transcript_support_level"]].print(n=20, chain=True)
+
+    print(z[z.gene_type == "protein_coding"].transcript_type.value_counts())
+    print(z[z.gene_type == "protein_coding"].transcript_support_level.value_counts())
+
+    print(z[z.gene_type == "lncRNA"].transcript_type.value_counts())
