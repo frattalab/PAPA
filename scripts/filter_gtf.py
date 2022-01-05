@@ -3,7 +3,44 @@ import numpy as np
 import pandas as pd
 import sys
 from functools import reduce
+from papa_helpers import eprint
 import operator
+import argparse
+from timeit import default_timer as timer
+
+# https://www.geeksforgeeks.org/python-key-value-pair-using-argparse/
+# create a keyvalue class
+# Args should be --less-than,--less-equals, --equals, --not-equals, --greater-equals, --greater-than
+# all but equals & not equals should be coercable to int or float
+# Function should do through each key in turn
+class keyvalue(argparse.Action):
+    # Constructor calling
+    def __call__(self,
+                 parser,
+                 namespace,
+                 values,
+                 option_string=None):
+
+        setattr(namespace, self.dest, dict())
+
+        for value in values:
+            # split it into key and value
+            key, value = value.split('=')
+
+            if "," in value:
+                # Multiple values, need a list
+                value = value.split(",")
+            else:
+                # just a single value, see if int/str
+                try:
+                    value = int(value)
+                except ValueError:
+                    # probably just a string, keep as is
+                    pass
+
+            # assign into dictionary
+            getattr(namespace, self.dest)[key] = value
+
 
 ## Pass operators as 2nd argument for 'equality' subsets
 # i.e. valid args are strings 'isin' or '~isin', or an operator (e.g. operator.eq())
@@ -30,7 +67,6 @@ def _subset_membership(gr, col_name, filter_tuple):
         return gr.subset(lambda df: ~df[col_name].isin(filter_tuple[0]))
 
 
-
 def _subset_equality(gr, col_name, filter_tuple):
     '''
     Subset PyRanges object over a specific column for equality, greater than/less than operations
@@ -46,6 +82,32 @@ def _subset_equality(gr, col_name, filter_tuple):
     return gr.subset(lambda df: filter_tuple[1](df[col_name], filter_tuple[0]))
 
 
+def _subset_str_contains(gr, col_name, filter_tuple):
+    '''
+    Subset PyRanges object over a specific column for equality, greater than/less than operations
+
+    gr: PyRanges object
+    col_name: name of column in gr on which to apply filtering
+    filter_tuple: 2-element tuple, first being value to check in column, 2nd being an comparison function from the operator base module
+    e.g. _subset_gr(gr, "gene_type", ("protein_coding", operator.eq))
+    '''
+
+    assert isinstance(gr, pr.PyRanges)
+    assert col_name in gr.columns
+    assert filter_tuple[1] in ["contains", "~contains"]
+
+    val = filter_tuple[0]
+
+    if isinstance(val, list):
+        val = "|".join(val)
+
+    if filter_tuple[1] == "contains":
+        return gr.subset(lambda df: df[col_name].str.contains(val, na=False))
+
+    elif filter_tuple[1] == "~contains":
+        return gr.subset(lambda df: ~df[col_name].str.contains(val, na=False))
+
+
 def _subset_gr(gr, col_name, filter_tuple):
     '''
     '''
@@ -54,8 +116,14 @@ def _subset_gr(gr, col_name, filter_tuple):
     assert col_name in gr.columns
 
     if isinstance(filter_tuple[1], str):
-        assert filter_tuple[1] in ["isin", "~isin"]
-        return _subset_membership(gr, col_name, filter_tuple)
+        assert filter_tuple[1] in ["isin", "~isin", "contains", "~contains"]
+
+        if filter_tuple[1] in ["isin", "~isin"]:
+            return _subset_membership(gr, col_name, filter_tuple)
+
+        else:
+            # str contains method wanted
+            return _subset_str_contains(gr, col_name, filter_tuple)
 
     else:
         # filter_tuple[1] should be an operator
@@ -79,7 +147,7 @@ def _subset_gr_and(gr,
     gr2 = _subset_equality(gr, col_name_1, filter_tuple_1)
 
     if isinstance(filter_tuple_2[1], str):
-        assert filter_tuple_2[1] in ["isin", "~isin"]
+        assert filter_tuple_2[1] in ["isin", "~isin", "contains", "~contains"]
         return _subset_membership(gr2, col_name_2, filter_tuple_2)
 
     else:
@@ -87,7 +155,7 @@ def _subset_gr_and(gr,
         return _subset_equality(gr2, col_name_2, filter_tuple_2)
 
 
-def filter_gtf_attributes(gr, gene_types,tr_types=None):
+def filter_gtf_attributes(gr, gene_types, tr_types=None):
     '''
     Filter PyRanges with two-level, group-specific filtering schemes given column/attribute values
 
@@ -199,100 +267,173 @@ def filter_gtf_attributes(gr, gene_types,tr_types=None):
         return pr.concat(gr_list)
 
 
+def main(gtf_path, filters_dict, out_path):
+    '''
+    '''
+
+    eprint("Reading in input GTF file, this can take a while...")
+
+    r_start = timer()
+    gtf = pr.read_gtf(gtf_path, duplicate_attr=True)
+    r_end = timer()
+
+    eprint(f"Reading complete - took {r_end - r_start} s")
+
+    eprint("Checking for numerics in filters_dict & updating corresponding column types...")
+    for col, filter_tup in filters_dict.items():
+        if isinstance(filter_tup[0], int) or isinstance(filter_tup[0], float):
+            eprint(f"Converting {col} to numeric in GTF PyRanges object...")
+
+            gtf = gtf.assign(col,
+                             lambda df: df[col].replace("NA", np.nan).astype(float))
+
+    eprint("Filtering GTF file...")
+    gtf = filter_gtf_attributes(gtf, filters_dict)
+
+    eprint(f"Writing filtered gtf to file at {out_path}...")
+    gtf.to_gtf(out_path)
+
+
 if __name__ == '__main__':
-    p_gtf = sys.argv[1]
 
-    print("Reading in GTF...")
+    start = timer()
 
-    gtf = pr.read_gtf(p_gtf, duplicate_attr=True)
+    descrpn = """Script to filter reference GTF based on presence/absence of attributes"""
 
-    # print("Trying filtering just for protein-coding genes")
+    parser = argparse.ArgumentParser(description=descrpn,
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter, # Add defaults to end of help strings
+                                     )
 
-    pc_only_gt = {"gene_type": ("protein_coding", operator.eq)}
+    # Args should be --less-than,--less-equals, --equals, --not-equals, --greater-equals, --greater-than
 
-    # print(filter_gtf_attributes(gtf, pc_only_gt)[["gene_id","gene_type"]])
-    #
-    # print("Trying membership filter, protein-coding & lncRNA genes")
+    parser.add_argument("-i",
+                        "--input-gtf",
+                        required=True,
+                        type=str,
+                        default=argparse.SUPPRESS,
+                        help="Path to input GTF file")
 
-    pc_lnc_gt = {"gene_type": (["protein_coding", "lncRNA"], "isin")}
+    parser.add_argument("-t",
+                        "--min-tsl",
+                        type=int,
+                        default=None,
+                        choices=list(range(1,6,1)),
+                        help="Minimum TSL level for a transcript to be retained (1-5 where 1 = highest support). Optional filter, include to activate"
+                        )
 
-    # filter_gtf_attributes(gtf, pc_lnc_gt)[["gene_id","gene_type"]].print(n=20)
+    # parser.add_argument("-g",
+    #                     "--gene-types",
+    #                     type=str,
+    #                     default=argparse.SUPPRESS,
+    #                     action=keyvalue,
+    #                     help="Filter to retain all entries of specified gene type (e.g. 'protein_coding'). Pass as <attribute_name>=<value1>,<value2> e.g. gene_type=protein_coding,lncRNA")
 
-    # print("Trying protein-coding or lncRNA, plus extract 'gene' rows only (i.e. multiple gene_type filters)")
-    #
-    # pc_lnc_gt["Feature"] = ("gene", operator.eq)
-    #
-    # filter_gtf_attributes(gtf, pc_lnc_gt)[["Feature", "gene_id","gene_type"]].print(n=20)
+    parser.add_argument("--include-flags",
+                        default=argparse.SUPPRESS,
+                        nargs="*",
+                        action=keyvalue,
+                        help="Filter to retain entries matching all provided conditions. Pass as <attribute_name>=<value>, separated by space if multiple and values comma separated if multiple")
 
-    # print("Trying protein-coding or lncRNA, transcript rows only plus extract protein-coding transcripts for protein-coding genes only")
-    #
-    # pc_only_tt = {"transcript_type": {"protein_coding": ("protein_coding", operator.eq)}}
-    #
-    # pc_lnc_gt["Feature"] = ("transcript", operator.eq)
-    #
-    # print("pc, lncRNA, transcript rows only")
-    #
-    # x = filter_gtf_attributes(gtf, pc_lnc_gt)[["Feature", "transcript_id", "gene_type", "transcript_type"]].print(n=20, chain=True)
-    #
-    # print(x.as_df()[["gene_type", "transcript_type"]].groupby("gene_type").describe())
-    #
-    #
-    # print(f"N unique txipts\n{x.as_df()[['gene_type', 'transcript_id']].groupby('gene_type').nunique()}")
-    #
-    #
-    # y = filter_gtf_attributes(gtf, pc_lnc_gt, pc_only_tt)[["Feature", "transcript_id", "gene_type", "transcript_type"]].print(n=20, chain=True)
-    #
-    # print(y.as_df()[["gene_type", "transcript_type"]].groupby("gene_type").describe())
-    #
-    # print(y[y.gene_type == "protein_coding"].transcript_type.value_counts())
-    #
-    # print(y[y.gene_type == "lncRNA"].transcript_type.value_counts())
-    #
-    # print(f"N unique txipts\n{y.as_df()[['gene_type', 'transcript_id']].groupby('gene_type').nunique()}")
+    parser.add_argument("--exclude-flags",
+                        default=argparse.SUPPRESS,
+                        nargs="*",
+                        action=keyvalue,
+                        help="Filter to exclude entries matching all provided conditions. Pass as <attribute_name>=<value>, separated by space if multiple and values comma separated if multiple")
 
-    print("Trying protein-coding or lncRNA, transcript rows only plus extract protein-coding transcripts for protein-coding genes, lncRNA txipts for lncRNAs only")
+    parser.add_argument("--tag-include",
+                        nargs="*",
+                        action=keyvalue,
+                        help="Filter to include entries based on conditions operating on the 'tag' attribute column. GTF files can have duplicate tag keys, PyRanges will concatenate values (separated by ',') so need bespoke matching approach")
 
-    pc_only_tt = {"protein_coding": {"transcript_type": ("protein_coding", operator.eq)},
-                  "lncRNA": {"transcript_type": ("lncRNA", operator.eq)
-                             }
-                  }
+    parser.add_argument("--tag-exclude",
+                        nargs="*",
+                        action=keyvalue,
+                        help="Filter to exclude entries based on conditions operating on the 'tag' attribute column. GTF files can have duplicate tag keys, PyRanges will concatenate values (separated by ',') so need bespoke matching approach")
 
-    pc_lnc_gt["Feature"] = ("transcript", operator.eq)
+    parser.add_argument("-o",
+                        "--output-gtf",
+                        type=str,
+                        default="filtered_gtf.gtf",
+                        help="Path to/name of output filtered GTF file")
 
-    print("pc, lncRNA, transcript rows only")
+    if len(sys.argv) == 1:
+        parser.print_help()
+        parser.exit()
 
-    x = filter_gtf_attributes(gtf, pc_lnc_gt)[["Feature", "transcript_id", "gene_type", "transcript_type"]].print(n=20, chain=True)
+    args = parser.parse_args()
+    # Get a dict from NameSpace object
+    args = vars(args)
 
-    y = filter_gtf_attributes(gtf, pc_lnc_gt, pc_only_tt)[["Feature", "transcript_id", "gene_type", "transcript_type"]].print(n=20, chain=True)
+    # print(args)
+    # Need to format parsed filters into {col: (val, operator)}
 
-    print(x[x.gene_type == "protein_coding"].transcript_type.value_counts())
+    # filter_args = ["min_tsl", "include_flags", "exclude_flags"]
+    filters_dict = {}
+    for arg_name, val in args.items():
 
-    print(x[x.gene_type == "lncRNA"].transcript_type.value_counts())
+        if arg_name == "min_tsl":
+            if val is not None:
+                filters_dict["transcript_support_level"] = tuple([val, operator.le])
+            else:
+                continue
 
+        elif arg_name == "tag_include":
+            # This is a dict of {col: val}
+            if val is not None:
+                for inc_col, inc_val in val.items():
+                    filters_dict[inc_col] = tuple([inc_val, "contains"])
 
-    print(f"N unique txipts\n{x.as_df()[['gene_type', 'transcript_id']].groupby('gene_type').nunique()}")
+            else:
+                continue
 
-    print("-------\n AFTER EXTRA FILTERING \n------")
+        elif arg_name == "tag_exclude":
+            # This is a dict of {col: val}
+            if val is not None:
+                for inc_col, inc_val in val.items():
+                    filters_dict[inc_col] = tuple([inc_val, "~contains"])
 
-    print(y[y.gene_type == "protein_coding"].transcript_type.value_counts())
+            else:
+                continue
 
-    print(y[y.gene_type == "lncRNA"].transcript_type.value_counts())
+        elif arg_name == "include_flags":
+            # This is a dict of {col: val}
+            if val is not None:
+                for inc_col, inc_val in val.items():
+                    if isinstance(inc_val, list):
+                        # multiple values
+                        filters_dict[inc_col] = tuple([inc_val, "isin"])
 
-    print(f"N unique txipts\n{y.as_df()[['gene_type', 'transcript_id']].groupby('gene_type').nunique()}")
+                    else:
+                        # just a single val
+                        filters_dict[inc_col] = tuple([inc_val, operator.eq])
 
+            else:
+                continue
 
-    print("\n TRY ABOVE PLUS TSL FILTERING FOR PC TRANSCRIPTS\n")
+        elif arg_name == "exclude_flags":
+            # This is a dict of {col: val}
+            if val is not None:
+                for inc_col, inc_val in val.items():
+                    if isinstance(inc_val, list):
+                        # multiple values
+                        filters_dict[inc_col] = tuple([inc_val, "~isin"])
 
-    pc_only_tt["protein_coding"]["transcript_support_level"] = (3, operator.le)
+                    else:
+                        # just a single val
+                        filters_dict[inc_col] = tuple([inc_val, operator.ne])
 
-    gtf.transcript_support_level = gtf.transcript_support_level.replace("NA", np.nan).astype(float)
+            else:
+                continue
 
-    print("This is transcript type filtering \n")
-    print(pc_only_tt)
+        else:
+            # option is not a filter
+            continue
 
-    z = filter_gtf_attributes(gtf, pc_lnc_gt, pc_only_tt)[["Feature", "transcript_id", "gene_type", "transcript_type", "transcript_support_level"]].print(n=20, chain=True)
+    eprint("Formatted filters from command line input")
+    eprint(filters_dict)
 
-    print(z[z.gene_type == "protein_coding"].transcript_type.value_counts())
-    print(z[z.gene_type == "protein_coding"].transcript_support_level.value_counts())
+    main(args["input_gtf"], filters_dict, args["output_gtf"])
 
-    print(z[z.gene_type == "lncRNA"].transcript_type.value_counts())
+    end = timer()
+
+    eprint(f"Complete: took {round(end - start, 3)} s / {round((end - start) / 60, 3)} min (3 dp)")
