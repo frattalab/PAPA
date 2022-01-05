@@ -53,6 +53,26 @@ polya_site_atlas: data/annotation/atlas.clusters.2.0.GRCh38.96.chr_prefix.bed
 pre_stringtie_processing: "none"
 
 ###
+# Reference GTF filtering
+###
+
+# True / False to switch on/off reference filtering
+filter_ref_gtf: True
+
+# Specify which GTF entries to retain based on attribute keys & values
+# LHS key - name of attribute in GTF (this can vary between Gencode/Ensembl so double check)
+# e.g. gene_type in Gencode vs gene_biotype in Ensembl GTF
+ref_gtf_filters:
+  # put empty list [] if no filtering
+  gene_type: ["protein_coding", "lncRNA"]
+  # Minimum transcript support level for tx to be retained
+  # Put 'None' (no quotes) for no TSL filtering
+  transcript_support_level: 3
+  # 'tag' attribute - which tags should be included/excluded?
+  include_tags: []
+  exclude_tags: ["mRNA_end_NF"]
+
+###
 # Expression filtering
 ###
 
