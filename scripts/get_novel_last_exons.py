@@ -99,7 +99,7 @@ def add_region_rank(gr,
 
     # keep="last" sets last row by ID (last exon) to False and all others True
     gr = gr.assign(out_col,
-                   lambda df: _df_annotate_region_rank(df,
+                   lambda df: _df_add_region_rank(df,
                                                        id_col,
                                                        region_number_col,
                                                        first_key,
