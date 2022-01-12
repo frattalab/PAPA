@@ -25,20 +25,20 @@ Novel last exons (spliced, bleedthrough) are extracted with the following criter
     - Sub-classify last_intron_spliced (downstream, proximal ALE, novel_3ss etc.)
 
 Takes as input:
-- GTF(s) of predicted reference transcripts
+- GTF of predicted novel transcripts
 - GTF of reference transcripts
 
 Outputs:
-- GTF of combined candidate novel last exons from all input GTFs
+- GTF of candidate novel last exons from input GTF
     - Additional attributes:
         - sample_name - input GTF name
-        - last_exon_ID - unique identifier shared between events with the same 5'ss
-        - papa_class - Event classification code (e.g. first_exon_extension,internal_intron_spliced etc.)
+        - isoform_class - Event classification code (e.g. first_exon_extension,internal_intron_spliced etc.)
         - ref_gene_id - gene_id of matching reference gene(s) (separated by ';' if multiple)
         - ref_transcript_id - transcript_ids of matching transcripts (separated by ';' if multiple)
 - 'Match status' TSV storing sample, match status, isoform class information for each transcript
-- 'general stats' TSV showing number of events of each class/ after each filtering step for each sample
+- 'general stats' TSV showing summary counts of number of events of each class
 '''
+
 
 # Che
 
@@ -83,7 +83,7 @@ def _df_add_region_rank(df,
 
     decisions = np.select(conditions, choices, default=internal_key)
 
-    return pd.Series(decisions)
+    return pd.Series(decisions, index=df.index)
 
 
 def add_region_rank(gr,
@@ -137,20 +137,20 @@ def extract_format_exons_introns(gr,
     gr: target PyRanges object, ideally obtained for pr.read_gtf(). Must contain 'exon' & 'transcript' in 'Feature' column
     '''
 
-    if exons["extract_regions"] or exons["extract_last_regions"]:
+    if exons_choices["extract_regions"] or exons_choices["extract_last_regions"]:
 
         exons = gr.subset(lambda df: df["Feature"] == "exon")
 
-        if exons["add_region_number"] or exons["add_region_rank"] or exons["extract_last_regions"]:
+        if exons_choices["add_region_number"] or exons_choices["add_region_rank"] or exons_choices["extract_last_regions"]:
 
             exons = add_region_number(exons,
                                       feature_key="exon",
                                       out_col="exon_number")
 
-            if exons["add_region_rank"] or exons["extract_last_regions"]:
+            if exons_choices["add_region_rank"] or exons_choices["extract_last_regions"]:
                 exons = add_region_rank(exons)
 
-                if exons["extract_last_regions"]:
+                if exons_choices["extract_last_regions"]:
                     last_exons = get_terminal_regions(exons)
 
                 else:
@@ -161,7 +161,7 @@ def extract_format_exons_introns(gr,
         else:
             last_exons = None
 
-    elif not exons["extract_regions"]:
+    elif not exons_choices["extract_regions"]:
         exons = None
 
     else:
@@ -170,21 +170,21 @@ def extract_format_exons_introns(gr,
 
 
 
-    if introns["extract_regions"] or introns["extract_last_regions"]:
+    if introns_choices["extract_regions"] or introns_choices["extract_last_regions"]:
 
         introns = gr.features.introns(by="transcript")
 
-        if introns["add_region_number"] or introns["add_region_rank"] or introns["extract_last_regions"]:
+        if introns_choices["add_region_number"] or introns_choices["add_region_rank"] or introns_choices["extract_last_regions"]:
 
             introns = add_region_number(introns,
                                         feature_key="intron",
                                         out_col="intron_number")
 
-            if introns["add_region_rank"] or introns["extract_last_regions"]:
+            if introns_choices["add_region_rank"] or introns_choices["extract_last_regions"]:
                 introns = add_region_rank(introns,
                                           region_number_col="intron_number")
 
-                if introns["extract_last_regions"]:
+                if introns_choices["extract_last_regions"]:
                     last_introns = get_terminal_regions(introns,
                                                         feature_key="intron",
                                                         region_number_col="intron_number")
@@ -197,7 +197,7 @@ def extract_format_exons_introns(gr,
         else:
             last_introns = None
 
-    elif not introns["extract_regions"]:
+    elif not introns_choices["extract_regions"]:
         # Return last introns only
         introns = None
 
@@ -244,8 +244,12 @@ def add_3p_extension_length(gr,
     # Find columns unique to ref_gr, so can drop at the end (no suffix added)
     not_cols = gr.columns.tolist()
 
+
+
     # Set of reference cols want to drop at end (either suffixed or not)
-    ref_cols = list(set(ref_gr.columns.tolist()) - set(ref_cols_to_keep))
+    # Note that Chromosome is never copied + suffixed in a join
+    ref_cols = list(set(ref_gr.columns) - set(["Chromosome"]) - set(ref_cols_to_keep))
+
     ref_to_drop = [col if col not in not_cols else col + suffix for col in ref_cols]
 
     # Only overlapping intervals kept
@@ -268,6 +272,8 @@ def add_3p_extension_length(gr,
                                                                                     keep="first"),
                           nb_cpu=nb_cpu)
 
+
+    # eprint(joined.columns)
 
     return joined.drop(ref_to_drop)
 
@@ -296,11 +302,8 @@ def _df_5p_end_tolerance(df, rank_col, first_key, first_5p_tolerance, other_5p_t
                              False
                              )
 
-    return pd.Series(decisions)
 
-
-
-    decisions = np.select(conditions, choices, default=internal_key)
+    return pd.Series(decisions, index=df.index)
 
 
 def _df_add_event_type(df, rank_col, rkey2key):
@@ -309,7 +312,10 @@ def _df_add_event_type(df, rank_col, rkey2key):
 
     assert isinstance(rkey2key, dict)
 
-    assert all([True if key in set(df[rank_col]) else False for key in rkey2key.keys()])
+    # eprint(df[rank_col].drop_duplicates())
+    # eprint(rkey2key)
+
+    assert any([True if key in set(df[rank_col]) else False for key in rkey2key.keys()])
 
     conditions = [df[rank_col] == key for key in rkey2key.keys()]
 
@@ -317,7 +323,7 @@ def _df_add_event_type(df, rank_col, rkey2key):
 
     decisions = np.select(conditions, choices)
 
-    return pd.Series(decisions)
+    return pd.Series(decisions, index=df.index)
 
 
 def find_extension_events(novel_le,
@@ -371,7 +377,7 @@ def find_extension_events(novel_le,
                                                                        )
                                        )
 
-    eprint(f"After 5'end match tolerance filter, number of events - {set(novel_le_ext.as_df()[id_col])}")
+    eprint(f"After 5'end match tolerance filter, number of events - {len(set(novel_le_ext.as_df()[id_col]))}")
 
 
     # assign a 'event_type' column based on overlapping exon 'rank'
@@ -407,11 +413,12 @@ def find_spliced_events(novel_li,
     '''
     '''
 
-    # Find columns unique to ref_gr, so can drop at the end (no suffix added)
-    not_cols = gr.columns.tolist()
+    # Find columns unique to ref_introns, so can drop at the end (no suffix added)
+    not_cols = ref_introns.columns.tolist()
 
     # Set of reference cols want to drop at end (either suffixed or not)
-    ref_cols = list(set(ref_gr.columns.tolist()) - set(ref_cols_to_keep))
+    # Note that Chromosome is never copied + suffixed in a join
+    ref_cols = list(set(ref_introns.columns.tolist()) - set(ref_cols_to_keep) - set(["Chromosome"]))
     ref_to_drop = [col if col not in not_cols else col + suffix for col in ref_cols]
 
     # Only novel last SJs overlapping ref SJs kept
@@ -441,7 +448,18 @@ def find_spliced_events(novel_li,
     return novel_spliced.drop(ref_to_drop)
 
 
-def main(input_gtf_list,
+def _filter_gr_for_tx(df,df2):
+
+    if df.empty:
+        return df
+
+    elif df2.empty:
+        return df
+
+    return df[~df["transcript_id"].isin(set(df2["transcript_id"]))]
+
+
+def main(input_gtf_path,
          ref_gtf_path,
          min_extension_length,
          first_exon_5p_tolerance,
@@ -497,102 +515,177 @@ def main(input_gtf_list,
     eprint(ref_exons.as_df().info(memory_usage="deep"))
     eprint(ref_introns.as_df().info(memory_usage="deep"))
 
-    for sample_gtf in input_gtf_list:
-        eprint(f"Reading in GTF at {sample_gtf}")
+    eprint("Reading in input GTF...")
 
-        start = timer()
-        novel_gtf = pr.read_gtf(sample_gtf)
+    start = timer()
+    novel_gtf = pr.read_gtf(input_gtf_path)
 
-        end = timer()
+    end = timer()
 
-        eprint(f"Complete - took {end - start} s")
+    eprint(f"Complete - took {end - start} s")
 
-        eprint(novel_gtf.as_df().info(memory_usage="deep"))
+    eprint(novel_gtf.as_df().info(memory_usage="deep"))
 
-        eprint(" ".join(["Extracting last exons & last introns",
-                         "from input GTF & numbering by",
-                         "5'-3' order along the transcript"]))
+    eprint(" ".join(["Extracting last exons & last introns",
+                     "from input GTF & numbering by",
+                     "5'-3' order along the transcript"]))
 
-        start = timer()
-        _, novel_le, _, novel_li = extract_format_exons_introns(novel_gtf,
-                                                                exons_choices={"extract_regions": False,
-                                                                               "add_region_number": trust_exon_number_input,
-                                                                               "add_region_rank": True,
-                                                                               "extract_last_regions": True},
-                                                                introns_choices={"extract_regions": False,
-                                                                                 "add_region_number": True,
-                                                                                 "add_region_rank": True,
-                                                                                 "extract_last_regions": True}
-                                                                )
+    start = timer()
+    _, novel_le, _, novel_li = extract_format_exons_introns(novel_gtf,
+                                                            exons_choices={"extract_regions": False,
+                                                                           "add_region_number": trust_exon_number_input,
+                                                                           "add_region_rank": True,
+                                                                           "extract_last_regions": True},
+                                                            introns_choices={"extract_regions": False,
+                                                                             "add_region_number": True,
+                                                                             "add_region_rank": True,
+                                                                             "extract_last_regions": True}
+                                                            )
 
-        end = timer()
+    end = timer()
 
-        eprint(f"Complete - took {end - start} s")
+    eprint(f"Complete - took {end - start} s")
 
-        eprint(novel_le.as_df().info(memory_usage="deep"))
-        eprint(novel_li.as_df().info(memory_usage="deep"))
+    eprint(novel_le.as_df().info(memory_usage="deep"))
+    eprint(novel_li.as_df().info(memory_usage="deep"))
 
-        # Remove tx if 3'ends of last exons overlap with any reference exon
-        eprint("Getting last exons with 3'ends not overlapping any known exons")
+    # Remove tx if 3'ends of last exons overlap with any reference exon
+    eprint("Getting last exons with 3'ends not overlapping any known exons")
 
-        start = timer()
-        no_exon_overlap_3p_ids = no_overlap_3p_ids(novel_le, ref_exons)
-        end = timer()
+    start = timer()
+    no_exon_overlap_3p_ids = no_overlap_3p_ids(novel_le, ref_exons)
+    end = timer()
 
-        eprint(f"Complete - took {end - start} s")
+    eprint(f"Complete - took {end - start} s")
 
-        novel_le = novel_le.subset(lambda df: df["transcript_id"].isin(no_exon_overlap_3p_ids))
-        novel_li = novel_li.subset(lambda df: df["transcript_id"].isin(no_exon_overlap_3p_ids))
+    eprint(f"Number of putative novel 3'ends {len(no_exon_overlap_3p_ids)}")
+
+    novel_le = novel_le.subset(lambda df: df["transcript_id"].isin(no_exon_overlap_3p_ids))
+    novel_li = novel_li.subset(lambda df: df["transcript_id"].isin(no_exon_overlap_3p_ids))
 
 
-        # Identify extension events
-        # Overlap with known exons, 3'end is downstream of overlapping exon end
-        # Retain extensions above a minimum length threshold
-        # Note: smallest extension for each novel event selected as representative
-        ## Avoids e.g. reassembly of long 3'UTR isoform being called as extension of proximal isoform
-        eprint("Finding novel extension events...")
+    # Identify extension events
+    # Overlap with known exons, 3'end is downstream of overlapping exon end
+    # Retain extensions above a minimum length threshold
+    # Note: smallest extension for each novel event selected as representative
+    ## Avoids e.g. reassembly of long 3'UTR isoform being called as extension of proximal isoform
+    eprint("Finding novel extension events...")
 
-        start = timer()
-        extensions = find_extension_events(novel_le,
-                                           ref_exons,
-                                           min_extension_length,
-                                           first_exon_5p_tolerance,
-                                           other_exon_5p_tolerance)
-        end = timer()
+    start = timer()
+    extensions = find_extension_events(novel_le,
+                                       ref_exons,
+                                       min_extension_length,
+                                       first_exon_5p_tolerance,
+                                       other_exon_5p_tolerance)
+    end = timer()
 
-        eprint(f"Complete - took {end - start} s")
+    eprint(f"Complete - took {end - start} s")
 
-        # Identify spliced events
-        # First filter novel events for non-extensions
-        eprint("Finding novel spliced events - filtering for non-extensions...")
+    # Identify spliced events
+    # First filter novel events for non-extensions
+    eprint("Finding novel spliced events - filtering for non-extensions...")
 
-        start = timer()
-        novel_li = novel_li.apply_pair(extensions,
-                                       lambda df, df2:
-                                       df[~df["transcript_id"].isin(set(df2.transcript_id))],
-                                       as_pyranges=True)
-        end = timer()
+    start = timer()
 
-        eprint(f"Complete - took {end - start} s")
+    eprint(extensions.columns)
+    eprint(novel_li.columns)
+    novel_li = novel_li.apply_pair(extensions,
+                                   lambda df, df2:
+                                   _filter_gr_for_tx(df, df2),
+                                   as_pyranges=True)
+    end = timer()
 
-        # Valid events overlap reference intron/junction and exactly share a 5'ss
-        eprint("Finding novel spliced events...")
+    eprint(f"Complete - took {end - start} s")
 
-        start = timer()
-        spliced = find_spliced_events(novel_li, ref_introns)
-        end = timer()
+    # Valid events overlap reference intron/junction and exactly share a 5'ss
+    eprint("Finding novel spliced events...")
 
-        eprint(f"Complete - took {end - start} s")
+    start = timer()
+    spliced = find_spliced_events(novel_li, ref_introns)
+    end = timer()
 
-        combined = pr.concat([extensions, spliced])
+    eprint(f"Complete - took {end - start} s")
 
-        # Output
-        combined.to_gtf(output_prefix + "novel_last_exons.gtf")
+    combined = pr.concat([extensions, spliced])
+
+    # Output
+    combined.to_gtf(output_prefix + "_last_exons.gtf")
 
 
 
 if __name__ == '__main__':
 
+    start = timer()
 
+    descrpn = """Extract putative novel last exons from a GTF file of predicted transcripts"""
 
-    main()
+    parser = argparse.ArgumentParser(description=descrpn,
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter, # Add defaults to end of help strings
+                                     )
+
+    parser.add_argument("-i",
+                        "--input-gtf",
+                        required=True,
+                        type=str,
+                        default=argparse.SUPPRESS,
+                        help="Path to input GTF file of predicted transcripts (from which putative novel last exons will be identified)")
+
+    parser.add_argument("-r",
+                        "--reference-gtf",
+                        required=True,
+                        type=str,
+                        default=argparse.SUPPRESS,
+                        help="Path to GTF file containing reference transcripts")
+
+    parser.add_argument("-m",
+                        "--min-extension-length",
+                        type=int,
+                        default=100,
+                        help="Minimum length (nt) of a putative extension last exon event for it to be retained")
+
+    parser.add_argument("-f",
+                        "--first-exon-5p-tolerance",
+                        type=int,
+                        default=100,
+                        help="Tolerance window (nt) to match 5'ends of reference first exons & first exon extension events")
+
+    parser.add_argument("-t",
+                        "--other-exon-5p-tolerance",
+                        type=int,
+                        default=0,
+                        help="Tolerance window (nt) to match 5'ends of reference exons & overlapping putative last exon")
+
+    parser.add_argument("-o",
+                        "--output-prefix",
+                        type=str,
+                        default="putative_novel",
+                        help="Name of prefix for output files - GTF  (suffixed with '_last_exons.gtf'), 'match stats' ('_match_stats.tsv')")
+
+    parser.add_argument("--trust-input-exon-number",
+                        action="store_true",
+                        default=False,
+                        help="Whether to 'trust' the exon number attribute in input GTF as being strand-aware (not the case for StringTie)")
+
+    parser.add_argument("--trust-ref-exon-number",
+                        action="store_true",
+                        default=False,
+                        help="Whether to 'trust' the exon number attribute in reference GTF as being strand-aware")
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        parser.exit()
+
+    args = parser.parse_args()
+
+    main(args.input_gtf,
+         args.reference_gtf,
+         args.min_extension_length,
+         args.first_exon_5p_tolerance,
+         args.other_exon_5p_tolerance,
+         args.trust_ref_exon_number,
+         args.trust_input_exon_number,
+         args.output_prefix)
+
+    end = timer()
+
+    eprint(f"Complete: took {round(end - start, 3)} s / {round((end - start) / 60, 3)} min (3 dp)")
