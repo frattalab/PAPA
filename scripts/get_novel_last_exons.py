@@ -307,7 +307,7 @@ def _df_5p_end_tolerance(df, rank_col, first_key, first_5p_tolerance, other_5p_t
     return pd.Series(decisions, index=df.index)
 
 
-def _df_add_event_type(df, rank_col, rkey2key):
+def _df_add_event_type(df, id_col, rank_col, rkey2key, collapse_by_id=True):
     '''
     '''
 
@@ -324,7 +324,31 @@ def _df_add_event_type(df, rank_col, rkey2key):
 
     decisions = np.select(conditions, choices)
 
-    return pd.Series(decisions, index=df.index)
+    if not collapse_by_id:
+        return pd.Series(decisions, index=df.index)
+
+    else:
+        # Some IDs could have multiple assignments based on overlapping exon
+        # Collapse to comma-separated string if multiple
+
+        if not df.empty:
+            to_join = df.loc[:, [id_col]]
+            to_join["event_type_decision"] = pd.Series(decisions, index=df.index)
+
+            to_join = (to_join.groupby(id_col)
+                       ["event_type_decision"]
+                       .agg(lambda x: ",".join(list(set(x))))
+                       .reset_index() #return tx_id to column
+                       )
+
+            # Now join by tx_id to get collapsed ID in correct (original) index
+            df2 = df.merge(to_join, on=id_col)
+
+            return df2["event_type_decision"]
+
+        else:
+            return pd.Series(decisions, index=df.index)
+
 
 
 def find_extension_events(novel_le,
@@ -384,6 +408,7 @@ def find_extension_events(novel_le,
     # assign a 'event_type' column based on overlapping exon 'rank'
     novel_le_ext = novel_le_ext.assign(event_type_outcol,
                                        lambda df: _df_add_event_type(df,
+                                                                     id_col,
                                                                      rank_col,
                                                                      rkey2key={"first": first_key,
                                                                                "internal": internal_key,
@@ -391,11 +416,11 @@ def find_extension_events(novel_le,
                                                                      )
                                        )
 
-    ev_types = novel_le_ext.as_df()[["transcript_id",
+    ev_types = novel_le_ext.as_df()[[id_col,
                                       event_type_outcol]
-                                     ].value_counts(subset=[event_type_outcol])
+                                    ].drop_duplicates().value_counts(subset=[event_type_outcol])
 
-    eprint(f"Number of events of each type\n{ev_types}")
+    eprint(f"Number of events of each type- {ev_types}")
 
     return novel_le_ext
 
@@ -443,6 +468,7 @@ def find_spliced_events(novel_li,
     # Add event_type col based on overlapping exon 'rank'
     novel_spliced = novel_spliced.assign(event_type_outcol,
                                          lambda df: _df_add_event_type(df,
+                                                                       id_col,
                                                                        rank_col,
                                                                        rkey2key={"first": first_key,
                                                                                  "internal": internal_key,
@@ -451,11 +477,11 @@ def find_spliced_events(novel_li,
                                          )
 
 
-    ev_types = novel_spliced.as_df()[["transcript_id",
+    ev_types = novel_spliced.as_df()[[id_col,
                                       event_type_outcol]
-                                     ].value_counts(subset=[event_type_outcol])
+                                     ].drop_duplicates().value_counts(subset=[event_type_outcol])
 
-    eprint(f"Number of events of each type\n{ev_types}")
+    eprint(f"Number of events of each type - {ev_types}")
 
     return novel_spliced.drop(ref_to_drop)
 
