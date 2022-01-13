@@ -5,6 +5,7 @@ import pyranges as pr
 import numpy as np
 import pandas as pd
 from papa_helpers import eprint, add_region_number, get_terminal_regions
+from pyranges.readers import read_gtf_restricted
 from timeit import default_timer as timer
 import argparse
 import sys
@@ -490,7 +491,8 @@ def main(input_gtf_path,
     eprint("Reading in reference GTF, this can take a while...")
 
     start = timer()
-    ref_gtf = pr.read_gtf(ref_gtf_path)
+    # ref_gtf = pr.read_gtf(ref_gtf_path)
+    ref_gtf = read_gtf_restricted(ref_gtf_path, skiprows=None)
     end = timer()
 
     eprint(f"Complete - took {end - start} s")
@@ -500,10 +502,27 @@ def main(input_gtf_path,
     # Ref GTFs often have a load of columns (attributes) don't need
     # Subset to essential to cut down on memory
     if trust_exon_number_ref:
-        ref_gtf = ref_gtf[processing_gtf_cols_en]
-
+        try:
+            ref_gtf = ref_gtf[processing_gtf_cols_en]
+        except KeyError:
+            # using gtf_restricted (No source or Score)
+            ref_gtf = ref_gtf[list(set(processing_gtf_cols_en) - set(["Source",
+                                                                      "Score",
+                                                                      "Frame"]
+                                                                     )
+                                   )
+                              ]
     else:
-        ref_gtf = ref_gtf[processing_gtf_cols_n_en]
+        try:
+            ref_gtf = ref_gtf[processing_gtf_cols_n_en]
+        except KeyError:
+            # using gtf_restricted (no Source or Score)
+            ref_gtf = ref_gtf[list(set(processing_gtf_cols_n_en) - set(["Source",
+                                                                        "Score",
+                                                                        "Frame"]
+                                                                       )
+                                   )
+                              ]
 
     # eprint(ref_gtf.as_df().info(memory_usage="deep"))
 
