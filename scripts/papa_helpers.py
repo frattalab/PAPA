@@ -220,6 +220,7 @@ def _df_add_region_number(df,id_col,sort_col="Start"):
         eprint("df is empty - returning empty pd.Series")
         return pd.Series()
 
+
 def add_region_number(gr,
                       id_col="transcript_id",
                       feature_key="intron",
@@ -282,3 +283,48 @@ def get_internal_regions(gr,
              )
 
     return out_gr
+
+
+def _pd_merge_gr(df, df_to_merge, how, on, suffixes, to_merge_cols):
+    '''
+    Perform a pd.merge inside a pr.apply to add columns from gr_to_merge based on metadata in gr_df
+    Here, will check the chromosome and strand of provided gr (gr_df)
+    and subset gr_to_merge to chr/strand before converting to df
+    This should cut down on memory requirements when convert to df (which requires pd.concat() x chrom & strand)
+    For this kind of merge, only expect joins between regions on same chr/strand
+    '''
+    #chromsomes returns a list of chr names (always 1 val)
+    assert isinstance(to_merge_cols, list)
+
+    if df_to_merge.empty:
+        eprint("df_to_merge for chr/strand pair {} is empty - returning to_merge cols filled with NaNs".format(",".join([df.Chromosome.iloc[0], df.Strand.iloc[0]])))
+
+        df_cols = df.columns.tolist()
+        # on won't have suffix added - need to remove as a target column
+        to_merge_cols = [col for col in to_merge_cols if col != on]
+
+        # eprint(df_cols)
+        # eprint(to_merge_cols)
+
+        # list of cols shared between dfs - need to add suffixes[1]
+        # list of cols only in df_to_merge - these stay the same in a merge
+        only_cols = [col for col in to_merge_cols if col not in df_cols]
+        shared_cols = [col for col in to_merge_cols if col in df_cols]
+
+        # eprint("only_cols - {}".format(only_cols))
+        # eprint("shared_cols - {}".format(shared_cols))
+
+        out_shared = [col + suffixes[1] for col in shared_cols]
+        target_cols = out_shared + only_cols
+
+        nrows = len(df.index)
+
+        out_cols = {col: pd.Series([np.nan]*nrows) for col in target_cols}
+
+        return df.assign(**out_cols)
+
+    else:
+        return df.merge(df_to_merge,
+                        how=how,
+                        on=on,
+                        suffixes=suffixes)
