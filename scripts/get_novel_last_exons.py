@@ -49,16 +49,14 @@ pyranges_gtf_cols = "Chromosome   Source   Feature    Start     End       Score 
 
 # Minimal cols needed from GTF for processing (no need to carry loads of cols)
 processing_gtf_cols_en = pyranges_gtf_cols + ["gene_id",
-                                              "gene_name",
                                               "transcript_id",
                                               "exon_number"]
 
 processing_gtf_cols_n_en = pyranges_gtf_cols + ["gene_id",
-                                                "gene_name",
                                                 "transcript_id"]
 
 
-def _n_ids(gr,id_col):
+def _n_ids(gr, id_col):
 
     assert id_col in gr.columns
 
@@ -75,8 +73,8 @@ def _df_add_region_rank(df,
     '''
 
     conditions = [df[region_number_col] == 1,
-    # keep="last" sets last in ID to 'False' and all others true (negate to keep last only)
-    # Safe as gr is sorted by tx_id and region_number_col prior
+                  # keep="last" sets last in ID to 'False' and all others true (negate to keep last only)
+                  # Safe as gr is sorted by tx_id and region_number_col prior
                   ~df.duplicated(subset=[id_col], keep="last")]
 
     choices = [first_key, last_key]
@@ -104,7 +102,6 @@ def add_region_rank(gr,
                                             ascending=True),
                   nb_cpu=1)
 
-    # keep="last" sets last row by ID (last exon) to False and all others True
     gr = gr.assign(out_col,
                    lambda df: _df_add_region_rank(df,
                                                   id_col,
@@ -137,69 +134,72 @@ def extract_format_exons_introns(gr,
     gr: target PyRanges object, ideally obtained for pr.read_gtf(). Must contain 'exon' & 'transcript' in 'Feature' column
     '''
 
-    if exons_choices["extract_regions"] or exons_choices["extract_last_regions"]:
+    if any([exons_choices["extract_regions"],
+            exons_choices["extract_last_regions"]
+            ]):
 
         exons = gr.subset(lambda df: df["Feature"] == "exon")
 
-        if exons_choices["add_region_number"] or exons_choices["add_region_rank"] or exons_choices["extract_last_regions"]:
+        if any([exons_choices["add_region_number"],
+                exons_choices["add_region_rank"],
+                exons_choices["extract_last_regions"]
+                ]):
 
+            # Other two depend on region_number so needs to be added
             exons = add_region_number(exons,
                                       feature_key="exon",
                                       out_col="exon_number")
 
-            if exons_choices["add_region_rank"] or exons_choices["extract_last_regions"]:
+            if exons_choices["add_region_rank"]:
                 exons = add_region_rank(exons)
 
-                if exons_choices["extract_last_regions"]:
-                    last_exons = get_terminal_regions(exons)
-
-                else:
-                    last_exons = None
+            if exons_choices["extract_last_regions"]:
+                last_exons = get_terminal_regions(exons)
 
             else:
                 last_exons = None
-        else:
-            last_exons = None
 
-    elif not exons_choices["extract_regions"]:
-        exons = None
+        if not exons_choices["extract_regions"]:
+            # Return last_exons only
+            exons = None
 
     else:
         exons = None
         last_exons = None
 
 
-
-    if introns_choices["extract_regions"] or introns_choices["extract_last_regions"]:
+    if any([introns_choices["extract_regions"],
+            introns_choices["extract_last_regions"]
+            ]):
 
         introns = gr.features.introns(by="transcript")
 
-        if introns_choices["add_region_number"] or introns_choices["add_region_rank"] or introns_choices["extract_last_regions"]:
+        if any([introns_choices["add_region_number"],
+                introns_choices["add_region_rank"],
+                introns_choices["extract_last_regions"]
+                ]):
 
+            # Other two depend on region_number so this must always be added
             introns = add_region_number(introns,
                                         feature_key="intron",
                                         out_col="intron_number")
 
-            if introns_choices["add_region_rank"] or introns_choices["extract_last_regions"]:
+            if introns_choices["add_region_rank"]:
                 introns = add_region_rank(introns,
                                           region_number_col="intron_number")
 
-                if introns_choices["extract_last_regions"]:
-                    last_introns = get_terminal_regions(introns,
-                                                        feature_key="intron",
-                                                        region_number_col="intron_number")
-
-                else:
-                    last_introns = None
+            if introns_choices["extract_last_regions"]:
+                last_introns = get_terminal_regions(introns,
+                                                    feature_key="intron",
+                                                    region_number_col="intron_number")
 
             else:
                 last_introns = None
-        else:
-            last_introns = None
 
-    elif not introns_choices["extract_regions"]:
-        # Return last introns only
-        introns = None
+        if not introns_choices["extract_regions"]:
+            # Return last introns only
+            introns = None
+
 
     else:
         #Return neither
@@ -228,8 +228,8 @@ def add_3p_extension_length(gr,
                             out_col="3p_extension_length",
                             suffix="_b",
                             ref_cols_to_keep=["gene_id",
-                                              "gene_name",
                                               "transcript_id",
+                                              "exon_id",
                                               "Start",
                                               "End",
                                               "region_rank"],
@@ -354,7 +354,7 @@ def find_extension_events(novel_le,
     # Find events extending 3'ends of ref exon, add 3p_extension_length (nt) column
     # 1 length per le returned (smallest)
     novel_le_ext = add_3p_extension_length(novel_le, ref_exons)
-    eprint(f"Number of events with any 3' extension - {len(set(novel_le.as_df()[id_col]))}")
+    eprint(f"Number of events with any 3' ref exon extension - {_n_ids(novel_le_ext, id_col)}")
 
     ext_len_dist = (novel_le_ext.as_df()
                     ["3p_extension_length"]
@@ -366,7 +366,7 @@ def find_extension_events(novel_le,
     # Subset for extensions of min length
     novel_le_ext = novel_le_ext.subset(lambda df: df["3p_extension_length"] >= min_extension_length)
 
-    eprint(f"After minimum length filter - {min_extension_length} - number of extension events - {len(set(novel_le_ext.as_df()[id_col]))}")
+    eprint(f"After minimum length filter - {min_extension_length} - number of extension events - {_n_ids(novel_le_ext, id_col)}")
 
     # Check 5'ends overlap within given tolerance
     novel_le_ext = novel_le_ext.subset(lambda df: _df_5p_end_tolerance(df,
@@ -377,7 +377,7 @@ def find_extension_events(novel_le,
                                                                        )
                                        )
 
-    eprint(f"After 5'end match tolerance filter, number of events - {len(set(novel_le_ext.as_df()[id_col]))}")
+    eprint(f"After 5'end match tolerance filter, number of events - {_n_ids(novel_le_ext, id_col)}")
 
 
     # assign a 'event_type' column based on overlapping exon 'rank'
@@ -390,7 +390,11 @@ def find_extension_events(novel_le,
                                                                      )
                                        )
 
-    eprint(f"Number of events of each type\n{novel_le_ext.as_df()[event_type_outcol].value_counts()}")
+    ev_types = novel_le_ext.as_df()[["transcript_id",
+                                      event_type_outcol]
+                                     ].value_counts(subset=[event_type_outcol])
+
+    eprint(f"Number of events of each type\n{ev_types}")
 
     return novel_le_ext
 
@@ -399,8 +403,8 @@ def find_spliced_events(novel_li,
                         ref_introns,
                         suffix="_b",
                         ref_cols_to_keep=["gene_id",
-                                          "gene_name",
                                           "transcript_id",
+                                          "exon_id",
                                           "Start",
                                           "End",
                                           "region_rank"],
@@ -425,6 +429,7 @@ def find_spliced_events(novel_li,
     novel_spliced = novel_li.join(ref_introns, suffix=suffix)
 
     eprint(f"Number of putative novel spliced events - {_n_ids(novel_spliced, id_col)}")
+    # eprint(f"ref exon ranks\n {novel_spliced.as_df()[rank_col].drop_duplicates()}")
 
     # Subset for exact matches at 5'end
     novel_spliced = novel_spliced.subset(lambda df: (df["Strand"] == "+") & (df["Start"] == df["Start_b"]) |
@@ -432,6 +437,7 @@ def find_spliced_events(novel_li,
                                          )
 
     eprint(f"After filtering for exact reference 5'ss matches, number of novel spliced events - {_n_ids(novel_spliced, id_col)}")
+    # eprint(f"exact matching exon_ranks\n {novel_spliced.as_df()[rank_col].drop_duplicates()}")
 
     # Add event_type col based on overlapping exon 'rank'
     novel_spliced = novel_spliced.assign(event_type_outcol,
@@ -443,7 +449,12 @@ def find_spliced_events(novel_li,
                                                                        )
                                          )
 
-    eprint(f"Number of events of each type\n{novel_spliced.as_df()[event_type_outcol].value_counts()}")
+
+    ev_types = novel_spliced.as_df()[["transcript_id",
+                                      event_type_outcol]
+                                     ].value_counts(subset=[event_type_outcol])
+
+    eprint(f"Number of events of each type\n{ev_types}")
 
     return novel_spliced.drop(ref_to_drop)
 
@@ -484,7 +495,7 @@ def main(input_gtf_path,
 
     eprint(f"Complete - took {end - start} s")
 
-    eprint(ref_gtf.as_df().info(memory_usage="deep"))
+    # eprint(ref_gtf.as_df().info(memory_usage="deep"))
 
     # Ref GTFs often have a load of columns (attributes) don't need
     # Subset to essential to cut down on memory
@@ -494,7 +505,7 @@ def main(input_gtf_path,
     else:
         ref_gtf = ref_gtf[processing_gtf_cols_n_en]
 
-    eprint(ref_gtf.as_df().info(memory_usage="deep"))
+    # eprint(ref_gtf.as_df().info(memory_usage="deep"))
 
     eprint(" ".join(["Extracting exons & introns from reference GTF,"
                      "numbering by 5'-3' order along the transcript &",
@@ -512,8 +523,11 @@ def main(input_gtf_path,
 
     eprint(f"Complete - took {end - start} s")
 
-    eprint(ref_exons.as_df().info(memory_usage="deep"))
-    eprint(ref_introns.as_df().info(memory_usage="deep"))
+    # eprint(ref_exons.as_df().info(memory_usage="deep"))
+    # eprint(ref_introns.as_df().info(memory_usage="deep"))
+
+    # eprint(ref_exons.region_rank.drop_duplicates())
+    # eprint(ref_introns.region_rank.drop_duplicates())
 
     eprint("Reading in input GTF...")
 
@@ -524,7 +538,7 @@ def main(input_gtf_path,
 
     eprint(f"Complete - took {end - start} s")
 
-    eprint(novel_gtf.as_df().info(memory_usage="deep"))
+    # eprint(novel_gtf.as_df().info(memory_usage="deep"))
 
     eprint(" ".join(["Extracting last exons & last introns",
                      "from input GTF & numbering by",
@@ -534,11 +548,11 @@ def main(input_gtf_path,
     _, novel_le, _, novel_li = extract_format_exons_introns(novel_gtf,
                                                             exons_choices={"extract_regions": False,
                                                                            "add_region_number": trust_exon_number_input,
-                                                                           "add_region_rank": True,
+                                                                           "add_region_rank": False,
                                                                            "extract_last_regions": True},
                                                             introns_choices={"extract_regions": False,
                                                                              "add_region_number": True,
-                                                                             "add_region_rank": True,
+                                                                             "add_region_rank": False,
                                                                              "extract_last_regions": True}
                                                             )
 
@@ -546,8 +560,8 @@ def main(input_gtf_path,
 
     eprint(f"Complete - took {end - start} s")
 
-    eprint(novel_le.as_df().info(memory_usage="deep"))
-    eprint(novel_li.as_df().info(memory_usage="deep"))
+    # eprint(novel_le.as_df().info(memory_usage="deep"))
+    # eprint(novel_li.as_df().info(memory_usage="deep"))
 
     # Remove tx if 3'ends of last exons overlap with any reference exon
     eprint("Getting last exons with 3'ends not overlapping any known exons")
@@ -558,7 +572,7 @@ def main(input_gtf_path,
 
     eprint(f"Complete - took {end - start} s")
 
-    eprint(f"Number of putative novel 3'ends {len(no_exon_overlap_3p_ids)}")
+    eprint(f"Number of putative novel 3'ends - {len(no_exon_overlap_3p_ids)}")
 
     novel_le = novel_le.subset(lambda df: df["transcript_id"].isin(no_exon_overlap_3p_ids))
     novel_li = novel_li.subset(lambda df: df["transcript_id"].isin(no_exon_overlap_3p_ids))
@@ -581,14 +595,15 @@ def main(input_gtf_path,
 
     eprint(f"Complete - took {end - start} s")
 
+    # eprint(f"extensions cols \n{extensions.columns}")
+
     # Identify spliced events
     # First filter novel events for non-extensions
     eprint("Finding novel spliced events - filtering for non-extensions...")
 
     start = timer()
 
-    eprint(extensions.columns)
-    eprint(novel_li.columns)
+    # TODO: is apply_pair any quicker than just making a big set & pr.subset?
     novel_li = novel_li.apply_pair(extensions,
                                    lambda df, df2:
                                    _filter_gr_for_tx(df, df2),
@@ -605,6 +620,8 @@ def main(input_gtf_path,
     end = timer()
 
     eprint(f"Complete - took {end - start} s")
+
+    # eprint(f"spliced columns {spliced.columns}")
 
     combined = pr.concat([extensions, spliced])
 
@@ -688,4 +705,4 @@ if __name__ == '__main__':
 
     end = timer()
 
-    eprint(f"Complete: took {round(end - start, 3)} s / {round((end - start) / 60, 3)} min (3 dp)")
+    eprint(f"Script complete: took {round(end - start, 3)} s / {round((end - start) / 60, 3)} min (3 dp)")
