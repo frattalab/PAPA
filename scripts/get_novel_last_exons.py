@@ -4,7 +4,7 @@ from __future__ import print_function
 import pyranges as pr
 import numpy as np
 import pandas as pd
-from papa_helpers import eprint, add_region_number, get_terminal_regions
+from papa_helpers import eprint, add_region_number, get_terminal_regions, _pd_merge_gr
 from pyranges.readers import read_gtf_restricted
 from timeit import default_timer as timer
 import argparse
@@ -667,8 +667,31 @@ def main(input_gtf_path,
     eprint(f"Complete - took {end - start} s")
 
     # eprint(f"spliced columns {spliced.columns}")
+    # Spliced is last introns, want corresponding last exons in output
+    spliced_le = novel_le.subset(lambda df: df["transcript_id"].isin(set(spliced.transcript_id)))
 
-    combined = pr.concat([extensions, spliced])
+    # Want to retain metadata from matching reference regions
+    spliced = spliced[["transcript_id",
+                       "gene_id_b",
+                       "transcript_id_b",
+                       "Start_b",
+                       "End_b",
+                       "event_type"]]
+
+    spliced_cols = spliced.columns.tolist()
+
+    spliced_le = spliced_le.apply_pair(spliced,
+                                       lambda df, df2:_pd_merge_gr(df,
+                                                                   df2,
+                                                                   how="left",
+                                                                   on="transcript_id",
+                                                                   suffixes=[None, "_ref"],
+                                                                   to_merge_cols=spliced_cols),
+                                       )
+
+    spliced_le = spliced_le.drop(like="_ref$")
+
+    combined = pr.concat([extensions, spliced_le])
 
     # Output
     combined.to_gtf(output_prefix + "_last_exons.gtf")
