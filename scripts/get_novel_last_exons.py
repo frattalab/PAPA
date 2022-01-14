@@ -4,7 +4,7 @@ from __future__ import print_function
 import pyranges as pr
 import numpy as np
 import pandas as pd
-from papa_helpers import eprint, add_region_number, get_terminal_regions, _pd_merge_gr
+from papa_helpers import eprint, add_region_number, get_terminal_regions, _pd_merge_gr, _n_ids
 from pyranges.readers import read_gtf_restricted
 from timeit import default_timer as timer
 import argparse
@@ -55,13 +55,6 @@ processing_gtf_cols_en = pyranges_gtf_cols + ["gene_id",
 
 processing_gtf_cols_n_en = pyranges_gtf_cols + ["gene_id",
                                                 "transcript_id"]
-
-
-def _n_ids(gr, id_col):
-
-    assert id_col in gr.columns
-
-    return len(set(gr.as_df()[id_col]))
 
 
 def _df_add_region_rank(df,

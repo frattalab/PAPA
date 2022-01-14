@@ -20,6 +20,11 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
+def _n_ids(gr, id_col):
+
+    assert id_col in gr.columns
+
+    return len(set(gr.as_df()[id_col]))
 
 
 def introns_from_df(df):
