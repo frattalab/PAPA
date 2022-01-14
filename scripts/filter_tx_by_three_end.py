@@ -1,4 +1,4 @@
-Beaudoing#!/usr/bin/env python3
+#!/usr/bin/env python3
 
 import pyranges as pr
 import pandas as pd
@@ -6,7 +6,7 @@ import numpy as np
 import pyfaidx
 from Bio.Seq import Seq
 from Bio import motifs
-from papa_helpers import eprint, get_terminal_regions, add_region_number
+from papa_helpers import eprint, _n_ids
 import argparse
 import os
 import sys
@@ -83,6 +83,7 @@ ATTATA
 AACAAG
 AATAAG""".split("\n")
 
+
 def region_around_pas(gr,
                       extend_5p=100,
                       extend_3p=0):
@@ -101,6 +102,9 @@ def region_around_pas(gr,
 def nearest_atlas_site(gr_3p,
                        atlas_gr,
                        max_distance,
+                       atlas_cols_to_keep=["Name",
+                                           "Start",
+                                           "End"],
                        class_outcol="atlas_filter",
                        distance_outcol="nearest_atlas_distance"):
     '''
@@ -116,10 +120,10 @@ def nearest_atlas_site(gr_3p,
     cols_to_drop = [col for col in atlas_gr.columns if col not in gr_3p_cols]
 
     gr_3p_nr = gr_3p.nearest(atlas_gr,
-                          strandedness="same",
-                          overlap=True,
-                          how=None # either direction
-                          ).drop(cols_to_drop).drop(like="_b$")
+                             strandedness="same",
+                             overlap=True,
+                             how=None # either direction
+                             ).drop(cols_to_drop).drop(like="_b$")
 
     # Rename distance column
     gr_3p_nr = gr_3p_nr.apply(lambda df: df.rename({"Distance": distance_outcol}, axis=1))
@@ -137,9 +141,9 @@ def nearest_atlas_site(gr_3p,
     return gr_3p_nr
 
 
-def _complement_seq(df, seq_col="seq"):
+def _rev_complement_seq(df, seq_col="seq"):
     '''
-    Complement sequence in Seq objects if region found on minus strand
+    Reverse complement sequence in Seq objects if region found on minus strand
     Use internally inside a pr.assign/apply
     Returns a Series of Seq objects (unmodified if on plus strand, complemented if on minus)
     '''
@@ -149,14 +153,31 @@ def _complement_seq(df, seq_col="seq"):
 
     elif (df["Strand"] == "-").all():
 
-        return df[seq_col].apply(lambda seq: seq.complement())
+        return df[seq_col].apply(lambda seq: seq.reverse_complement())
 
     else:
         raise ValueError("Invalid value in 'Strand' column for df - must be one of '+' or '-'")
 
 
+def _search_to_3end_str(idx, motif, region_len):
+    '''
+    '''
+
+    # Seq's considered/read 5'-3' - want the 0-based index of final nt in seq
+    region_end_idx = region_len - 1
+
+    # instances.search returns idx of first nt in found motif (i.e. 5'most)
+    # Want index of final nt (3'most) in found motif
+    motif_end_idx = idx + (len(motif) - 1)
+
+    dist_3p = motif_end_idx - region_end_idx
+
+    return str(dist_3p) + "_" + str(motif)
+
+
 def find_pas_motifs(gr,
                     pas_motifs,
+                    region_length,
                     seq_col="seq",
                     class_outcol="motif_filter",
                     motifs_outcol="pas_motifs",
@@ -178,12 +199,12 @@ def find_pas_motifs(gr,
 
     # Search for exact match to any provided motif in each region
     out_gr = gr.assign(motifs_outcol,
-                   lambda df: df.seq.apply(lambda region:
-                                          ",".join([str(idx) + "_" + str(motif)
-                                                    for idx, motif in pas_motifs.instances.search(region)
-                                                    ]
-                                                   )
-                                           ),
+                       lambda df: df[seq_col].apply(lambda region:
+                                                    ",".join([_search_to_3end_str(idx, motif, region_length)
+                                                              for idx, motif in pas_motifs.instances.search(region)
+                                                              ]
+                                                             )
+                                                    )
                        )
 
     # If no match found then an empty string is output
@@ -194,57 +215,97 @@ def find_pas_motifs(gr,
                                                          1,
                                                          0)
                                                )
-                          )
+                           )
 
     return out_gr
 
 
+def _str_min_dist_dev_motif(search_str, expected_distance):
+    '''
+    '''
+
+    #"-26_AATATA,-5_ATTATA" if sinlge
+    mtfs = search_str.split(",")
+    # ['-26_AATATA', '-5_ATTATA']
+
+    dists = [int(mt.split("_")[0]) for mt in mtfs]
+    # [-26, -5]
+
+    # adjust for difference from expected difference (i.e. vals should be close to 0)
+    dists = [abs(dist + 20) for dist in dists]
+
+    min_dist = min(dists)
+
+    return min_dist
+
+
+def _df_select_min_motif(df, le_id_col, motifs_col, expected_distance):
+    '''
+    '''
+
+    # eprint(df[["last_exon_id", "atlas_filter", "motif_filter", "pas_motifs"]])
+
+    # First add a col reporting smallest deviation from expected motif 3'end distance
+    # e.g. expected_distance = 20; "-26_AATATA,-5_ATTATA" --> 6
+    df["min_motif_3p_deviation"] = df[motifs_col].apply(lambda row: _str_min_dist_dev_motif(row, expected_distance))
+
+    # eprint(df[["last_exon_id", "atlas_filter", "motif_filter", "pas_motifs", "min_motif_3p_deviation"]])
+
+
+
+    idxs_sel_motif = (df.drop_duplicates(subset=[le_id_col, motifs_col])  # in case have same le duplicated (e.g. same source + coord, diff tx_ids)
+                      .groupby(le_id_col)
+                      ["min_motif_3p_deviation"]
+                      .idxmin().tolist())
+
+    # eprint("this is idxs_sel_motif object")
+    # eprint(idxs_sel_motif)
+    #
+    # eprint(df.index)
+
+    return df.loc[idxs_sel_motif, :]
+
+
+def select_motif(gr, le_id_col, motifs_col, expected_distance=20):
+    '''
+    '''
+
+    gr = gr.apply(lambda df: _df_select_min_motif(df,
+                                                  le_id_col,
+                                                  motifs_col,
+                                                  expected_distance
+                                                  )
+                  )
+
+    return gr
+
+
+
+
 
 def main(gtf_path,
-         match_stats_path,
          fasta_path,
          atlas_path,
          pas_motifs,
          max_atlas_dist,
          motif_search_length,
+         le_id_col,
          output_prefix):
     '''
     '''
 
     assert isinstance(pas_motifs, list)
 
-    eprint("reading in GTF of intron-chain filtered transcripts...")
+    eprint("reading in GTF of putative novel last exons...")
     gtf = pr.read_gtf(gtf_path)
 
-    eprint("reading in TSV of match status for intron-chain filtered transcripts...")
-    match_stats = pd.read_csv(match_stats_path, sep="\t")
+    # Might keep the 'transcript' features in input GTF...
 
+    le = gtf.subset(lambda df: df["Feature"] == "exon")
 
-    #1. Filter for valid polyadenylation events want to check for 3'end genuineness
-    # Since spliced 3'UTR intron events do not have a cleavage event, will not assess here
-    # These will be reported without filtering in the output GTF
-    eprint("Extracting valid polyadenylation events from match stats TSV & gtf...")
-    valid_utr_spliced = set(match_stats.loc[(match_stats["match_class"] == "valid") &
-                                            (match_stats["isoform_class"] == "3utr_intron_spliced"),
-                                            "transcript_id_novel"])
-
-
-    valid_to_test = set(match_stats.loc[(match_stats["match_class"] == "valid") &
-                                        (match_stats["isoform_class"] != "3utr_intron_spliced"),
-                                        "transcript_id_novel"])
-
-    # Length of valid_to_test set check (if 0 output empty...)
-
-    gtf_to_test = gtf.subset(lambda df: df["transcript_id"].isin(valid_to_test))
-
-    #2 Get last exons for each transcript and extract three ends
-
-    le = get_terminal_regions(gtf_to_test.subset(lambda df: df.Feature == "exon"),
-                              source="stringtie",
-                              filter_single=True)
+    #2 Get 3'ends for each last exon
 
     le_polya = le.three_end()
-
 
     #3. Find distance from predicted 3'end to nearest atlas site
     # Reporting 2 columns - 1 with distance (nt), 1 specifying whether at/below max_distance (1/0)
@@ -253,6 +314,7 @@ def main(gtf_path,
     atlas = pr.read_bed(atlas_path)
 
     eprint("Finding nearest atlas poly(A) sites to predicted 3'ends...")
+    # adds atlas_filter (1/0) and atlas_distance (nt) columns
     le_polya = nearest_atlas_site(le_polya, atlas, max_atlas_dist)
 
 
@@ -276,11 +338,12 @@ def main(gtf_path,
     # Add to gr
     le_polya.seq = three_end_seqs
 
-    # Complement sequences on minus strand to match pas motifs
-    eprint("Complementing region sequences on minus strand to match plus strand-oriented PAS motifs...")
+    # Motifs defined 5'-3' - rev complement sequences on minus strand to match pas motifs
+    # Start of seq == 5'end (both strands)
+    eprint("Reverse complementing region sequences on minus strand to match plus strand-oriented PAS motifs...")
 
     le_polya = le_polya.assign("seq",
-                               lambda df: _complement_seq(df))
+                               lambda df: _rev_complement_seq(df))
 
     #C - Search for presence of any of provided motifs in last x nt of Txs
     # Returns col with binary found/not_found (1/0) & motif-seq + position
@@ -288,13 +351,41 @@ def main(gtf_path,
 
     motif_start = timer()
 
-    le_polya = find_pas_motifs(le_polya, pas_motifs)
+    # Adds motif_filter (1/0) & pas_motifs (<distance_from_3p_end>_<found_motif>)
+    le_polya = find_pas_motifs(le_polya, pas_motifs, motif_search_length)
 
     motif_end = timer()
 
     eprint(f"Finding motifs complete: took {motif_end - motif_start} s")
 
-    #5.Generate 'match_stats' dataframe plus summary counts dfs
+    eprint(le_polya[["last_exon_id", "atlas_filter", "motif_filter", "pas_motifs"]])
+
+    # 5. Select representative site for each le_id
+
+
+
+    # Extract last exons that only pass motif filter
+
+    eprint("Selecting 3'end with min deviation from expected PAS motif --> 3'end signal for last exons only passing the motif filter...")
+
+    start = timer()
+    motif_pass = le_polya.subset(lambda df: (df["atlas_filter"] == 0) &
+                                 (df["motif_filter"] == 1))
+
+    # eprint(motif_pass[["last_exon_id", "atlas_filter", "motif_filter", "pas_motifs"]])
+    # eprint(_n_ids(motif_pass, le_id_col))
+
+    # For each 'grouped' last exon, select 3'end with min deviation from expected position of motif from 3'end
+    motif_pass = select_motif(motif_pass, le_id_col, "pas_motifs", expected_distance=20)
+
+    # eprint(motif_pass[["last_exon_id", "atlas_filter", "motif_filter", "pas_motifs"]])
+    # eprint(_n_ids(motif_pass, le_id_col))
+
+    end = timer()
+
+    eprint(f"Selecting representative 3'end for motif-only events complete: took {end - start} s")
+
+    #6. Generate 'match_stats' dataframe plus summary counts dfs
     # Subset to df of Tx_id, atlas_filter, motif_filter, atlas_distance & motifs_found
     # Find set of valid transcript IDs that pass either filter
 
@@ -304,7 +395,8 @@ def main(gtf_path,
                                         "atlas_filter",
                                         "motif_filter",
                                         "nearest_atlas_distance",
-                                        "pas_motifs"
+                                        "pas_motifs",
+                                        "event_type"
                                         ]]
 
     # A - add 'match_class' column ('valid/not_valid') if either of atlas_filter/motif_filter are 1
@@ -316,54 +408,32 @@ def main(gtf_path,
     pas_valid_ids = set(pas_match_stats.loc[pas_match_stats["match_class"] == "valid",
                                             "transcript_id"])
 
-    # Create dummy spliced 3'UTR introns match_stats df
-    # i.e. all 'valid', but NaN for other columns as can't assess
-
-    utr_spliced_match_stats = pd.DataFrame({"transcript_id": list(valid_utr_spliced),
-                                            "match_class": ["valid"]*len(valid_utr_spliced),
-                                            "atlas_filter": [np.nan]*len(valid_utr_spliced),
-                                            "motif_filter": [np.nan]*len(valid_utr_spliced),
-                                            "nearest_atlas_distance": [np.nan]*len(valid_utr_spliced),
-                                            "pas_motifs": [np.nan]*len(valid_utr_spliced)
-                                            }
-                                           )
-
-    pas_match_stats = pd.concat([pas_match_stats, utr_spliced_match_stats],
-                                ignore_index=True)
-
-    pas_match_stats = pas_match_stats.rename({"transcript_id": "transcript_id_novel"},
-                                             axis=1)
-
     # B - Return isoform_class to pas_match_stats
-    pas_match_stats = pas_match_stats.merge(match_stats[["transcript_id_novel",
-                                                         "isoform_class"]],
-                                            on="transcript_id_novel",
-                                            how="left")
 
     # C - Generate 'valid & 'not_valid' summary counts dfs
     valid_summary = (pas_match_stats.loc[lambda x: x["match_class"] == "valid", :]
-                                    .drop_duplicates(subset=["transcript_id_novel"])
-                                    ["isoform_class"]
+                                    .drop_duplicates(subset=["transcript_id"])
+                                    ["event_type"]
                                     .value_counts(dropna=False)
                      )
 
     nv_summary = (pas_match_stats.loc[lambda x: x["match_class"] == "not_valid", :]
-                                 .drop_duplicates(subset=["transcript_id_novel"])
-                                 ["isoform_class"]
+                                 .drop_duplicates(subset=["transcript_id"])
+                                 ["event_type"]
                                  .value_counts(dropna=False)
                   )
 
-    eprint("Transcripts passing atlas/motif filters by isoform class...")
+    eprint("Transcripts passing atlas/motif filters by event_type class...")
     eprint(valid_summary)
 
-    eprint("Transcripts failing atlas/motif filters by isoform class...")
+    eprint("Transcripts failing atlas/motif filters by event type...")
     eprint(nv_summary)
 
     #6. Filter input GTF for valid IDs and output GTF to file
     # get set of valid IDs from pas_match_stats (& filter GTF for these)
     eprint("Filtering input GTF for transcripts passing atlas/motif filters...")
     valid_ids = set(pas_match_stats.loc[pas_match_stats["match_class"] == "valid",
-                                        "transcript_id_novel"]
+                                        "transcript_id"]
                     )
 
 
@@ -407,53 +477,65 @@ if __name__ == '__main__':
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter, # Add defaults to end of help strings
                                      )
 
-    parser.add_argument("-i", "--input-gtf",
-                        dest="input_gtf", type=str,
+    parser.add_argument("-i",
+                        "--input-gtf",
+                        type=str,
                         default=argparse.SUPPRESS,
                         required=True,
                         help="Path to GTF file containing intron-chain filtered transcripts output by filter_tx_by_intron_chain.py")
 
-    parser.add_argument("-s","--match-status-tsv",
-                        dest="match_status_tsv",
-                        type=str,required=True,
-                        default=argparse.SUPPRESS,
-                        help="Path to '<prefix>.match_stats.tsv' file corresponding to input intron-chain filtered transcripts output by filter_tx_by_intron_chain.py")
-
-    parser.add_argument("-f","--fasta",
+    parser.add_argument("-f",
+                        "--fasta",
                         type=str,
                         required=True,
                         default=argparse.SUPPRESS,
                         help="Path to genome FASTA file sequence. It's expected that a .fai file (FASTA index, generated by samtools faidx) is also present at the same location.")
 
-    parser.add_argument("-a","--pas-atlas",
-                        dest="atlas", type=str,
+    parser.add_argument("-a",
+                        "--pas-atlas",
+                        dest="atlas",
+                        type=str,
                         required=True,
                         default=argparse.SUPPRESS,
                         help="Path to BED file of poly(A) sites defined from orthogonal sequencing (e.g. 3'end sequencing, PolyASite atlas)")
 
-    parser.add_argument("-p","--pas-motifs",
-                        dest="motifs",type=str,
+    parser.add_argument("-m",
+                        "--pas-motifs",
+                        dest="motifs",
+                        type=str,
                         required=True,
                         default=argparse.SUPPRESS,
                         help="polyA signal motifs defined by Gruber 2016 (PolyASite v1.0, 'Gruber', 18 motifs)" +
                              " or Beaudoing 2000 ('Beaudoing', 12 motifs (all of which recaptured by Gruber)). " +
                              "Path to TXT file containing PAS motifs (DNA, one per line) can also be supplied")
 
-    parser.add_argument("-m","--max-atlas-distance",
-                        dest="max_atlas_dist", type=int,
+    parser.add_argument("-d",
+                        "--max-atlas-distance",
+                        dest="max_atlas_dist",
+                        type=int,
                         default=100,
                         help="Maximum distance (nt) between predicted 3'end and nearest atlas polyA site for transcript to be retained")
 
-    parser.add_argument("-u","--motif-upstream-region-length",
-                        dest="motif_upstream_length", type=int,
+    parser.add_argument("-u",
+                        "--motif-upstream-region-length",
+                        dest="motif_upstream_length",
+                        type=int,
                         default=100,
                         help="length (nt) of region from upstream to predicted 3'end in which to search for presence of any of defined poly(A) signal motifs (retained if true)")
 
-    parser.add_argument("-o","--output-prefix",
+    parser.add_argument("-o",
+                        "--output-prefix",
                         dest="output_prefix",
                         type=str,
                         default="three_end_matched_transcripts",
                         help="Prefix for output files. '.<suffix>' added depending on output file type ('.gtf' for valid transcripts GTF, '.match_stats.tsv' for TSV with match/filtering status etc.)",)
+
+    parser.add_argument("--last-exon-id-attribute-name",
+                        type=str,
+                        default="last_exon_id",
+                        dest="le_id_col",
+                        help="Name of attribute storing last exon grouping identifier")
+
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -476,16 +558,16 @@ if __name__ == '__main__':
         eprint(f"pas motifs {', '.join(pas_motifs)}")
 
     else:
-        raise ValueError(f"-p/--pas-motifs argument invalid - must be one of 'Gruber', 'Beaudoing' or a valid path to TXT file. You passed {args.motifs}")
+        raise ValueError(f"-m/--pas-motifs argument invalid - must be one of 'Gruber', 'Beaudoing' or a valid path to TXT file. You passed {args.motifs}")
 
 
     main(args.input_gtf,
-         args.match_status_tsv,
          args.fasta,
          args.atlas,
          pas_motifs,
          args.max_atlas_dist,
          args.motif_upstream_length,
+         args.le_id_col,
          args.output_prefix)
 
     end = timer()
