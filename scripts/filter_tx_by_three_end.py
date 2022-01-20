@@ -105,6 +105,7 @@ def nearest_atlas_site(gr_3p,
                        atlas_cols_to_keep=["Name",
                                            "Start",
                                            "End"],
+                       atlas_suffix="_atlas",
                        class_outcol="atlas_filter",
                        distance_outcol="nearest_atlas_distance"):
     '''
@@ -116,14 +117,23 @@ def nearest_atlas_site(gr_3p,
     # pr.nearest returns cols from atlas_gr for nearest feature
     # in out gr only want to retain the nearest distance from this object
     # Cols unique to atlas_gr won't have suffix added, so need to ID here
+
+    # Set of reference cols want to drop at end (either suffixed or not)
+    # Note that Chromosome is never copied + suffixed in a join
+    atlas_cols = list(set(atlas_gr.columns.tolist()) - set(["Chromosome"]) - set(atlas_cols_to_keep))
+
     gr_3p_cols = gr_3p.columns.tolist()
-    cols_to_drop = [col for col in atlas_gr.columns if col not in gr_3p_cols]
+
+    cols_to_drop = [col if col not in gr_3p_cols else col + atlas_suffix for col in atlas_cols]
 
     gr_3p_nr = gr_3p.nearest(atlas_gr,
                              strandedness="same",
                              overlap=True,
+                             suffix=atlas_suffix,
                              how=None # either direction
-                             ).drop(cols_to_drop).drop(like="_b$")
+                             )
+
+    gr_3p_nr = gr_3p_nr.drop(cols_to_drop)
 
     # Rename distance column
     gr_3p_nr = gr_3p_nr.apply(lambda df: df.rename({"Distance": distance_outcol}, axis=1))
@@ -139,6 +149,150 @@ def nearest_atlas_site(gr_3p,
                             )
 
     return gr_3p_nr
+
+
+def _df_grp_select_3p_atlas(df, distance_col, start_col):
+    '''
+    Return the row with the most 3' nearest atlas site (strand-aware)
+    Intended to be applied to pandas.df.groupby object (where group is last_exon_id)
+    '''
+    assert start_col in df.columns
+
+    # Get min distance values for each, keeping ties
+    df = df[df[distance_col] == df[distance_col].min()]
+
+    # Now select most 3' atlas site (if ties, otherwise returns above)
+    if (df["Strand"] == "+").all():
+        # most 3' = rightmost coord
+        return df.loc[df[start_col].idxmax()]
+
+    elif (df["Strand"] == "-").all():
+        # most 3' = leftmost coord
+        return df.loc[df[start_col].idxmin()]
+
+
+def _df_select_min_atlas(df, le_id_col, distance_col, start_col):
+    '''
+    Select representative nearest atlas site for each last exon / group of events
+    Intended to be applied to internal dataframes of a PyRanges object (inside pr.apply())
+    '''
+
+    # Get min distance values for each le_id keeping ties
+    # If ties, pick the most 3' position
+    # + strand - 3'most position = rightmost (largest)
+    # - strand - 3'most position = leftmost (smallest)
+
+    df = (df.groupby(le_id_col)
+          .apply(lambda grp: _df_grp_select_3p_atlas(grp, distance_col, start_col))
+          .reset_index(le_id_col, drop=True) # remove le_id_col from index (already a column)
+          )
+
+    return df
+
+
+
+def select_atlas(gr,
+                 le_id_col,
+                 coord_suffix="_atlas",
+                 distance_col="nearest_atlas_distance"):
+    '''
+    Select representative atlas site for each last exon/'grouping ID'
+
+    1. Minimises absolute distance to nearest atlas site **QUESTIONING - not sure most sensible**
+    2. If tied absolute distance, pick the more downstream site
+        - (want to find most distal end, due to drop in cov at 3'ends expect end to be called upstream of genuine end)
+    '''
+
+    assert le_id_col in gr.columns
+    assert distance_col in gr.columns
+    assert "Start" + coord_suffix in gr.columns
+    assert "End" + coord_suffix in gr.columns
+
+    start_col = "Start" + coord_suffix
+    end_col = "End" + coord_suffix
+
+    # Drop to 1 row for each overlapping atlas site for given last exon
+    gr = gr.apply(lambda df: df.drop_duplicates(subset=[le_id_col, start_col, end_col]))
+
+    # Select closest atlas site per last exon ID (if tied most 3')
+
+    # eprint(gr)
+    gr = gr.apply(lambda df: _df_select_min_atlas(df, le_id_col, distance_col, start_col))
+
+    return gr
+
+
+def _df_update_coord(df, change, replace_col, old_out_suffix):
+    '''
+    Swap values in Start/End coordinates with a provided column
+    Adapted from pr.methods.new_position._new_position (to only swap a single coordinate)
+    '''
+    assert isinstance(df, pd.DataFrame)
+    assert change in ["Start", "End"]
+    assert replace_col in df.columns
+
+
+    # Get original column order
+    col_order = df.columns.tolist()
+
+    # Replace 'replace_col' with old column + old_out_suffix
+    # (i.e. previous col moves to starting position of replace_col)
+    replace_idx = col_order.index(replace_col)
+    col_order[replace_idx] = change + old_out_suffix
+
+    col_changes = {replace_col: change,
+                   change: change + old_out_suffix}
+
+    return df.rename(columns=col_changes)[col_order]
+
+
+def _df_update_to_atlas(df, atlas_suffix):
+    '''
+    '''
+    assert isinstance(df, pd.DataFrame)
+
+    atlas_start_col = "Start" + atlas_suffix
+    atlas_end_col = "End" + atlas_suffix
+
+    if (df["Strand"] == "+").all():
+        # update End col to atlas_end_col
+        return _df_update_coord(df,
+                                change="End",
+                                replace_col=atlas_end_col,
+                                old_out_suffix="_le")
+
+    elif (df["Strand"] == "-").all():
+        # 3'end = Start - update to atl_start_col
+        return _df_update_coord(df,
+                                change="Start",
+                                replace_col=atlas_start_col,
+                                old_out_suffix="_le"
+                                )
+
+
+def update_to_atlas(gr, distance_col="nearest_atlas_distance", atlas_suffix="_atlas"):
+    '''
+    # Should always be a single row per group now
+    '''
+
+    atlas_start = "Start" + atlas_suffix
+    atlas_end = "End" + atlas_suffix
+
+    assert atlas_start in gr.columns
+    assert atlas_end in gr.columns
+
+    # Directly matches/overlaps atlas site - don't update 3'end
+    gr_exact = gr.subset(lambda df: df[distance_col] == 0)
+    gr_update = gr.subset(lambda df: df[distance_col] != 0)
+
+    # Update to
+    gr_update = gr_update.apply(lambda df: _df_update_to_atlas(df,
+                                                               atlas_suffix
+                                                               ),
+                                )
+
+
+    return pr.concat([gr_exact, gr_update])
 
 
 def _rev_complement_seq(df, seq_col="seq"):
@@ -256,7 +410,9 @@ def _df_select_min_motif(df, le_id_col, motifs_col, expected_distance):
     idxs_sel_motif = (df.drop_duplicates(subset=[le_id_col, motifs_col])  # in case have same le duplicated (e.g. same source + coord, diff tx_ids)
                       .groupby(le_id_col)
                       ["min_motif_3p_deviation"]
-                      .idxmin().tolist())
+                      .idxmin()
+                      .tolist()
+                      )
 
     # eprint("this is idxs_sel_motif object")
     # eprint(idxs_sel_motif)
@@ -289,6 +445,7 @@ def main(gtf_path,
          pas_motifs,
          max_atlas_dist,
          motif_search_length,
+         motif_expected_dist,
          le_id_col,
          output_prefix):
     '''
@@ -354,18 +511,52 @@ def main(gtf_path,
     # Adds motif_filter (1/0) & pas_motifs (<distance_from_3p_end>_<found_motif>)
     le_polya = find_pas_motifs(le_polya, pas_motifs, motif_search_length)
 
+    # No longer needed, stop lugging it around in future
+    le_polya = le_polya.drop("seq")
+
     motif_end = timer()
 
     eprint(f"Finding motifs complete: took {motif_end - motif_start} s")
 
-    eprint(le_polya[["last_exon_id", "atlas_filter", "motif_filter", "pas_motifs"]])
+    # eprint(le_polya[["last_exon_id", "atlas_filter", "motif_filter", "pas_motifs"]])
 
     # 5. Select representative site for each le_id
+    eprint("Selecting & updating representative 3'end for ends with nearby atlas site...")
+    start = timer()
 
+    # Extract last exons passing atlas filter
+    # eprint(le_polya.columns)
+    atlas_pass = le_polya.subset(lambda df: df["atlas_filter"].eq(1))
 
+    # For each last exon ID, select most 3' nearest atlas site
+    # eprint(atlas_pass.columns)
+
+    # eprint(f" atlas_pass pre selection\n{atlas_pass[['last_exon_id', 'atlas_filter', 'motif_filter', 'pas_motifs']]}")
+    # eprint(f"Pre N unique le_ids - {atlas_pass.as_df()[le_id_col].nunique()}")
+
+    atlas_pass = select_atlas(atlas_pass, le_id_col)
+
+    # eprint(f"Post N unique le_ids - {atlas_pass.as_df()[le_id_col].nunique()}")
+    # eprint(f"atlas_pass post selection\n{atlas_pass}")
+
+    # Update atlas 3'end (if not directly matching/overlapping)
+
+    # eprint(f"pre update 3'end \n {atlas_pass}")
+
+    atlas_pass = update_to_atlas(atlas_pass)
+
+    # Get a weird length mismatch Error at this point (if print), I don't know why
+    # e.g. ValueError: Length mismatch: Expected axis has 32 elements, new values have 31 elements
+    # Reconverting seems to avoid this...
+    atlas_pass = pr.PyRanges(atlas_pass.as_df())
+
+    end = timer()
+
+    eprint(f"Selecting & updating representative 3'end for atlas-only events complete: took {end - start} s")
+
+    # eprint(f"post update 3'end\n {pr.PyRanges(atlas_pass.as_df())[['nearest_atlas_distance','Start_le', 'End_le']]}")
 
     # Extract last exons that only pass motif filter
-
     eprint("Selecting 3'end with min deviation from expected PAS motif --> 3'end signal for last exons only passing the motif filter...")
 
     start = timer()
@@ -376,7 +567,7 @@ def main(gtf_path,
     # eprint(_n_ids(motif_pass, le_id_col))
 
     # For each 'grouped' last exon, select 3'end with min deviation from expected position of motif from 3'end
-    motif_pass = select_motif(motif_pass, le_id_col, "pas_motifs", expected_distance=20)
+    motif_pass = select_motif(motif_pass, le_id_col, "pas_motifs", expected_distance=motif_expected_dist)
 
     # eprint(motif_pass[["last_exon_id", "atlas_filter", "motif_filter", "pas_motifs"]])
     # eprint(_n_ids(motif_pass, le_id_col))
@@ -385,39 +576,59 @@ def main(gtf_path,
 
     eprint(f"Selecting representative 3'end for motif-only events complete: took {end - start} s")
 
+    eprint("Combining selected last exons for each group...")
+    combined_pass = pr.concat([atlas_pass, motif_pass])
+
+    # eprint(combined_pass)
+    # eprint(combined_pass.columns)
+
+
+    pass_ids = set(combined_pass.as_df()[le_id_col])
+
+
     #6. Generate 'match_stats' dataframe plus summary counts dfs
     # Subset to df of Tx_id, atlas_filter, motif_filter, atlas_distance & motifs_found
     # Find set of valid transcript IDs that pass either filter
 
     eprint("Generating 'match class' table and 'summary stats' tables...")
 
-    pas_match_stats = le_polya.as_df()[["transcript_id",
-                                        "atlas_filter",
-                                        "motif_filter",
-                                        "nearest_atlas_distance",
-                                        "pas_motifs",
-                                        "event_type"
-                                        ]]
+    ms_cols = [le_id_col,
+               "transcript_id",
+               "atlas_filter",
+               "motif_filter",
+               "nearest_atlas_distance",
+               "pas_motifs",
+               "event_type"
+               ]
+
+    fail_match_stats = (le_polya.as_df()[ms_cols]
+                        .loc[lambda df: ~df[le_id_col].isin(pass_ids), :]
+                        )
+
+    pass_match_stats = combined_pass.as_df()[ms_cols]
+
+    match_stats = pd.concat([pass_match_stats, fail_match_stats], ignore_index=True)
+
 
     # A - add 'match_class' column ('valid/not_valid') if either of atlas_filter/motif_filter are 1
-    pas_match_stats["match_class"] = np.where((pas_match_stats["atlas_filter"] == 1) |
-                                               (pas_match_stats["motif_filter"] == 1),
+    match_stats["match_class"] = np.where((match_stats["atlas_filter"] == 1) |
+                                               (match_stats["motif_filter"] == 1),
                                                "valid",
                                                "not_valid")
 
-    pas_valid_ids = set(pas_match_stats.loc[pas_match_stats["match_class"] == "valid",
+    pas_valid_ids = set(match_stats.loc[match_stats["match_class"] == "valid",
                                             "transcript_id"])
 
-    # B - Return isoform_class to pas_match_stats
+    # B - Return isoform_class to match_stats
 
     # C - Generate 'valid & 'not_valid' summary counts dfs
-    valid_summary = (pas_match_stats.loc[lambda x: x["match_class"] == "valid", :]
+    valid_summary = (match_stats.loc[lambda x: x["match_class"] == "valid", :]
                                     .drop_duplicates(subset=["transcript_id"])
                                     ["event_type"]
                                     .value_counts(dropna=False)
                      )
 
-    nv_summary = (pas_match_stats.loc[lambda x: x["match_class"] == "not_valid", :]
+    nv_summary = (match_stats.loc[lambda x: x["match_class"] == "not_valid", :]
                                  .drop_duplicates(subset=["transcript_id"])
                                  ["event_type"]
                                  .value_counts(dropna=False)
@@ -430,17 +641,11 @@ def main(gtf_path,
     eprint(nv_summary)
 
     #6. Filter input GTF for valid IDs and output GTF to file
-    # get set of valid IDs from pas_match_stats (& filter GTF for these)
-    eprint("Filtering input GTF for transcripts passing atlas/motif filters...")
-    valid_ids = set(pas_match_stats.loc[pas_match_stats["match_class"] == "valid",
-                                        "transcript_id"]
-                    )
+    # get set of valid IDs from match_stats (& filter GTF for these)
+    eprint("Writing output GTF for last exons passing atlas/motif filters...")
 
-
-    valid_gtf = gtf.subset(lambda df: df.transcript_id.isin(valid_ids))
-
-    eprint(f"writing filtered GTF to {output_prefix + '.gtf'}")
-    valid_gtf.to_gtf(output_prefix + ".gtf")
+    eprint(f"writing output GTF to {output_prefix + '.gtf'}")
+    combined_pass.to_gtf(output_prefix + ".gtf")
 
     eprint("writing 'match class' and 'summary counts' tables to TSV...")
 
@@ -456,11 +661,11 @@ def main(gtf_path,
                                                   index=False,
                                                   na_rep="NA")
 
-    pas_match_stats.to_csv(output_prefix + ".match_stats.tsv",
-                           sep="\t",
-                           header=True,
-                           index=False,
-                           na_rep="NA")
+    match_stats.to_csv(output_prefix + ".match_stats.tsv",
+                       sep="\t",
+                       header=True,
+                       index=False,
+                       na_rep="NA")
 
 
 
@@ -523,6 +728,12 @@ if __name__ == '__main__':
                         default=100,
                         help="length (nt) of region from upstream to predicted 3'end in which to search for presence of any of defined poly(A) signal motifs (retained if true)")
 
+    parser.add_argument("-e",
+                        "--motif-expected-distance",
+                        type=int,
+                        default=20,
+                        help="Expected distance upstream from 3'end for polyA signal motifs (typically enriched ~20nt upstream from cleavage site). If a last exon has multiple found motifs, the 3'end with a motif closest to this value will be selected as the representative 3'end.")
+
     parser.add_argument("-o",
                         "--output-prefix",
                         dest="output_prefix",
@@ -567,6 +778,7 @@ if __name__ == '__main__':
          pas_motifs,
          args.max_atlas_dist,
          args.motif_upstream_length,
+         args.motif_expected_distance,
          args.le_id_col,
          args.output_prefix)
 
