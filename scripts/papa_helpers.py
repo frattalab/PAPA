@@ -4,6 +4,7 @@ from __future__ import print_function
 import pyranges as pr
 import pandas as pd
 import numpy as np
+from pyranges.pyranges import PyRanges
 import os
 import sys
 
@@ -333,3 +334,124 @@ def _pd_merge_gr(df, df_to_merge, how, on, suffixes, to_merge_cols):
                         how=how,
                         on=on,
                         suffixes=suffixes)
+
+
+# def _check_to_extract_order(attribute, to_extract):
+#     '''
+#     Not implementing yet as need to account for attribute string (e.g. 'exon_number' for 'transcript' or 'gene' fields) not contaning certain tags when others do
+#     This would mean a different order of columns for different rows, which will have unintended consequences
+#     '''
+#
+#     # Get indexes of each
+#     idxs = [attribute.find(attr) for attr in to_extract]
+#
+#     # if not found (-1), need to remove from to_extract
+#
+#     # Sort to_extract according to (L -> R) positions in attribute string
+#     # Otherwise regex breaks
+#     # https://stackoverflow.com/a/9764364
+#     _, sorted_to_extract = (list(l) for l in zip(*sorted(zip(idxs, to_extract))))
+#
+#     return sorted_to_extract
+
+
+def _fetch_attributes(attribute,
+                      to_extract=["gene_id",
+                                  "transcript_id",
+                                  "exon_number"
+                                  "gene_name"],
+                      ):
+    '''
+    '''
+
+    assert to_extract[0] == "gene_id", f"gene_id must be the first attribute to extract, following was found - {to_extract[0]}"
+
+    # Remove quotes from attributes string
+    no_quotes = attribute.str.replace('"', '').str.replace("'", "")
+
+    # Assemble regex
+    # Regex completely lifted from _fetch_gene_transcript_exon_id (pr.readers._fetch_gene_transcript_exon_id)
+    # https://github.com/biocore-ntnu/pyranges/blob/a36a2c7fac88f297bf41c529734c2cb6950bed3b/pyranges/readers.py#L210
+
+    gene_id = to_extract[0] + ".?(.+?);"
+
+    others = ["(?:.*" + attr + ".?(.+?);)?" for attr in to_extract[1:]]
+
+    attr_regex = "".join(list(gene_id) + others)
+
+    df = no_quotes.str.extract(attr_regex,
+                               expand=True)  # .iloc[:, [1, 2, 3]]
+
+    df.columns = to_extract
+
+    # TODO: Why does _fetch_gene_transcript_exon_id need 'annotation' arg for Ensembl? What is it doing?
+
+    return df
+
+
+
+def read_gtf_specific(f,
+                      attr_to_extract=["gene_id",
+                                       "transcript_id",
+                                       "exon_number",
+                                       "gene_name"],
+                      skiprows=None,
+                      as_df=False,
+                      nrows=None
+                      ):
+    '''
+    Custom GTF reader almost entirely mimicking read_gtf_restricted, except to extract custom set of attributes
+    No way near as flexible or feature-rich as normal function (yet)
+
+    THE ORDER OF KEYS IN attr_to_extract MUST BE SAME ORDER THESE KEYS APPEAR IN THE STRING
+    (not every row has to have each key e.g. 'exon_number' for 'gene' entries),
+    '''
+
+    dtypes = {
+        "Chromosome": "category",
+        "Feature": "category",
+        "Strand": "category"
+    }
+
+
+    df_iter = pd.read_csv(
+        f,
+        sep="\t",
+        comment="#",
+        usecols=[0, 2, 3, 4, 5, 6, 8],
+        header=None,
+        names="Chromosome Feature Start End Score Strand Attribute".split(),
+        dtype=dtypes,
+        chunksize=int(1e5),
+        skiprows=skiprows,
+        nrows=nrows)
+
+    dfs = []
+    for df in df_iter:
+        # Since Start is 1-indexed
+        df.Start -= 1
+
+        if sum(df.Score == ".") == len(df):
+            cols_to_concat = "Chromosome Start End Strand Feature".split()
+        else:
+            cols_to_concat = "Chromosome Start End Strand Feature Score".split(
+            )
+
+        extract = _fetch_attributes(df.Attribute, attr_to_extract)
+        extract.columns = attr_to_extract ## TODO: is this necessary? df has columns added in _fetch_attributes
+
+        if "exon_number" in extract.columns:
+            extract.exon_number = extract.exon_number.astype(float)
+
+        df = pd.concat([df[cols_to_concat], extract], axis=1, sort=False)
+
+        dfs.append(df)
+
+    df = pd.concat(dfs, sort=False)
+
+    df.loc[:, "Start"] = df.Start - 1
+
+    if not as_df:
+        return PyRanges(df)
+    else:
+        return df
