@@ -479,7 +479,7 @@ def find_spliced_events(novel_li,
     return novel_spliced.drop(ref_to_drop)
 
 
-def _filter_gr_for_tx(df,df2):
+def _filter_gr_for_not_tx(df,df2):
 
     if df.empty:
         return df
@@ -644,7 +644,7 @@ def main(input_gtf_path,
     # TODO: is apply_pair any quicker than just making a big set & pr.subset?
     novel_li = novel_li.apply_pair(extensions,
                                    lambda df, df2:
-                                   _filter_gr_for_tx(df, df2),
+                                   _filter_gr_for_not_tx(df, df2),
                                    as_pyranges=True)
     end = timer()
 
