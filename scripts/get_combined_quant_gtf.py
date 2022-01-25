@@ -4,7 +4,7 @@ import pyranges as pr
 import pandas as pd
 import numpy as np
 from pyranges.readers import read_gtf_restricted
-from papa_helpers import eprint, get_terminal_regions, add_region_number, _df_add_region_number, _pd_merge_gr, read_gtf_specific
+from papa_helpers import eprint, get_terminal_regions, get_internal_regions, add_region_number, _df_add_region_number, _pd_merge_gr, read_gtf_specific
 import sys
 import argparse
 from timeit import default_timer as timer
@@ -176,6 +176,7 @@ def main(novel_le_path,
         ref_e = add_region_number(ref_e, feature_key="exon", out_col="exon_number")
         ref_le = get_terminal_regions(ref_e)
 
+
     eprint("Reading in input GTF of novel last exons...")
 
     # novel_le = pr.read_gtf(novel_le_path)
@@ -289,7 +290,7 @@ def main(novel_le_path,
 
     combined_ext = combined_ext.apply(lambda df: update_extension_le_number(df))
 
-    eprint(combined_ext[["ref_gene_id", "le_id", "le_number", "event_type", "is_extension", "le_number_ext"]].print(n=50))
+    # eprint(combined_ext[["ref_gene_id", "le_id", "le_number", "event_type", "is_extension", "le_number_ext"]].print(n=50))
 
     # Reassign le_id with updated number, return to same shape as no extensions gr
     combined_ext = (combined_ext.drop(["le_id", "le_number", "is_extension"])
@@ -299,40 +300,24 @@ def main(novel_le_path,
                             )
                     )
 
-    eprint(combined_ext)
+    # eprint(combined_ext)
 
-    # Get set of regions from which need to extract unique regions
-    int_mask = (combined_ext.event_type.isin(["first_exon_extension", "internal_exon_extension"]))
-
-    combined_ext_int = combined_ext[int_mask]
-
-    eprint(combined_ext_int[["gene_id", "event_type", "Start_b", "End_b"]])
-
-    olap_exons = combined_ext_int.apply(lambda df:
-                                        (df[["Chromosome", "Start_b", "End_b", "Strand"]]
-                                         .rename(columns={"Start_b": "Start", "End_b": "End"})
-                                         .astype({"Start": "int32", "End": "int32"})))
-
-    eprint(ref_e[ref_e.gene_id == "ENSG00000000457.14"])
-    eprint(combined_ext_int[combined_ext_int.ref_gene_id == "ENSG00000000457.14"])
-    eprint(combined_ext_int)
-
-    eprint("Getting extension-specific regions for first & internal events")
-    # Substract overlapping exon region from first & internal extensions
-
-    combined_ext_int = combined_ext_int.subtract(ref_e)
-
-    eprint(combined_ext_int)
-
-    # combined_ext_int.to_gtf("wtf_internal.gtf")
-
-    quant_combined_ext = pr.concat([combined_ext[~int_mask], combined_ext_int])
-
-    # GTF containing last exon regions for quantification purposes
-    quant_combined = pr.concat([quant_combined_ext, combined_n_ext])
-
-    # GTF containing defined last exons
+    # GTF containing defined last exons (with le_id etc. defined)
     combined = pr.concat([combined_ext, combined_n_ext])
+
+    # Want a GTF containing 'unique regions' (relative to first/internal exons) for each last exon
+    # These regions will be used for quantification
+
+    eprint("Extracting unique regions for last exons overlapping reference first/internal exons")
+    ref_e_nl = pr.concat([get_terminal_regions(ref_e, which_region="first"),
+                          get_internal_regions(ref_e)]
+                         )
+
+    eprint("Generating 'unique regions' for last exons overlapping non-last reference exons...")
+    quant_combined = combined.subtract(ref_e_nl)
+
+    # eprint(combined)
+    # eprint(quant_combined)
 
     eprint("Generating tx2le, le2gene assignment tables...")
 
@@ -344,7 +329,7 @@ def main(novel_le_path,
                                                                      header=True)
 
 
-    eprint(f"Writing 'le2pas' (transcript_id | pas_id) to TSV... - {output_prefix + '.tx2le.tsv'}")
+    eprint(f"Writing 'tx2le' (transcript_id | pas_id) to TSV... - {output_prefix + '.tx2le.tsv'}")
 
     quant_combined.as_df()[["transcript_id",
                             "le_id"]].drop_duplicates().to_csv(output_prefix + ".tx2le.tsv",
@@ -375,6 +360,58 @@ def main(novel_le_path,
 
 if __name__ == '__main__':
 
-    # eprint(sys.argv[1])
-    # eprint(sys.argv[2])
-    main(sys.argv[1], sys.argv[2], ref_attr_key_order, False, "its_ready")
+    start = timer()
+
+    descrpn = """Generate quantification ready GTF of last exons & group transcripts according to shared last exon"""
+
+    parser = argparse.ArgumentParser(description=descrpn,
+                                     formatter_class=argparse.ArgumentDefaultsHelpFormatter, # Add defaults to end of help strings
+                                     )
+
+    parser.add_argument("-i",
+                        "--input-gtf",
+                        type=str,
+                        default=argparse.SUPPRESS,
+                        required=True,
+                        help="Path to input GTF file containing last exons")
+
+    parser.add_argument("-r",
+                        "--reference-gtf",
+                        required=True,
+                        type=str,
+                        default=argparse.SUPPRESS,
+                        help="Path to GTF file containing reference transcripts from which last exons will be quantified")
+
+    parser.add_argument("-o","--output-prefix",
+                        dest="output_prefix",
+                        type=str,
+                        default="novel_ref_combined",
+                        help="""path to/prefix for output files.
+                                '.quant.last_exons.gtf' is suffixed for GTF of unique last exons regions for quantification,
+                                '.last_exons.gtf' for GTF of last exons,
+                                '.tx2le.tsv' suffixed for (transcript_id | le_id) TSV,
+                                '.tx2gene.tsv' for (transcript_id | gene_id) TSV,
+                                '.le2gene.tsv' for (le_id | gene_id) TSV,
+                                """)
+
+    parser.add_argument("--trust-ref-exon-number",
+                        action="store_true",
+                        default=False,
+                        help="Whether to 'trust' the exon number attribute in reference GTF as being strand-aware")
+
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        parser.exit()
+
+    args = parser.parse_args()
+
+    main(args.input_gtf,
+         args.reference_gtf,
+         ref_attr_key_order,
+         args.trust_ref_exon_number,
+         args.output_prefix)
+
+    end = timer()
+
+    eprint(f"Script complete: took {round(end - start, 3)} s / {round((end - start) / 60, 3)} min (3 dp)")
