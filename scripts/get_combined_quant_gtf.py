@@ -146,6 +146,7 @@ def main(novel_le_path,
          ref_gtf_path,
          ref_attr_key_order,
          trust_exon_number_ref,
+         output_prefix
          ):
     '''
     '''
@@ -300,6 +301,7 @@ def main(novel_le_path,
 
     eprint(combined_ext)
 
+    # Get set of regions from which need to extract unique regions
     int_mask = (combined_ext.event_type.isin(["first_exon_extension", "internal_exon_extension"]))
 
     combined_ext_int = combined_ext[int_mask]
@@ -316,10 +318,58 @@ def main(novel_le_path,
     eprint(combined_ext_int)
 
     eprint("Getting extension-specific regions for first & internal events")
-    # Get
+    # Substract overlapping exon region from first & internal extensions
+
     combined_ext_int = combined_ext_int.subtract(ref_e)
 
     eprint(combined_ext_int)
+
+    # combined_ext_int.to_gtf("wtf_internal.gtf")
+
+    quant_combined_ext = pr.concat([combined_ext[~int_mask], combined_ext_int])
+
+    # GTF containing last exon regions for quantification purposes
+    quant_combined = pr.concat([quant_combined_ext, combined_n_ext])
+
+    # GTF containing defined last exons
+    combined = pr.concat([combined_ext, combined_n_ext])
+
+    eprint("Generating tx2le, le2gene assignment tables...")
+
+    eprint(f"Writing 'tx2gene' (transcript_id | gene_id) to TSV... - {output_prefix + '.tx2gene.tsv'}")
+    quant_combined.as_df()[["transcript_id",
+                            "ref_gene_id"]].drop_duplicates().to_csv(output_prefix + ".tx2gene.tsv",
+                                                                     sep="\t",
+                                                                     index=False,
+                                                                     header=True)
+
+
+    eprint(f"Writing 'le2pas' (transcript_id | pas_id) to TSV... - {output_prefix + '.tx2le.tsv'}")
+
+    quant_combined.as_df()[["transcript_id",
+                            "le_id"]].drop_duplicates().to_csv(output_prefix + ".tx2le.tsv",
+                                                               sep="\t",
+                                                               index=False,
+                                                               header=True)
+
+
+    eprint(f"Writing 'le2gene' (le_id | gene_id) to TSV... - {output_prefix + '.le2gene.tsv'}")
+    quant_combined.as_df()[["le_id",
+                            "ref_gene_id"]].drop_duplicates().to_csv(output_prefix + ".le2gene.tsv",
+                                                                     sep="\t",
+                                                                     index=False,
+                                                                     header=True)
+
+
+
+
+    eprint("Writing last exon GTFs to file...")
+
+    eprint(f"Writing quantification-ready last exons GTF to file - {output_prefix + '.quant.last_exons.gtf'}")
+    quant_combined.to_gtf(output_prefix + ".quant.last_exons.gtf")
+
+    eprint(f"Writing last exons GTF to file - {output_prefix + '.last_exons.gtf'}")
+    combined.to_gtf(output_prefix + ".last_exons.gtf")
 
 
 
@@ -327,4 +377,4 @@ if __name__ == '__main__':
 
     # eprint(sys.argv[1])
     # eprint(sys.argv[2])
-    main(sys.argv[1], sys.argv[2], ref_attr_key_order, False)
+    main(sys.argv[1], sys.argv[2], ref_attr_key_order, False, "its_ready")
