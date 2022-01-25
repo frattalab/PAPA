@@ -32,6 +32,7 @@ def main(input_gtf_list,
          sample_id_col,
          fname_suffix,
          le_id_col,
+         no_le_id,
          out_gtf):
     '''
     '''
@@ -42,15 +43,19 @@ def main(input_gtf_list,
 
     # TODO: consider using 5'ends (w/ some tolerance) to group together LEs of the same gene
 
-    # Assign a 'last exon ID' based on whether last exons overlap
-    les = (les.cluster()
-             .apply(lambda df: df.rename({"Cluster": le_id_col},
-                                         axis="columns")
-                    )
-           )
 
-    # eprint(les.columns)
-    eprint(f"Number of last exons after grouping by overlap - {_n_ids(les, le_id_col)}")
+    # Assign a 'last exon ID' based on whether last exons overlap
+    if not no_le_id:
+        eprint(f"Assigning last exon ID - {le_id_col} - based on overlap")
+
+        les = (les.cluster()
+                  .apply(lambda df: df.rename({"Cluster": le_id_col},
+                                                axis="columns")
+                         )
+               )
+
+        # eprint(les.columns)
+        eprint(f"Number of last exons after grouping by overlap - {_n_ids(les, le_id_col)}")
 
     les.to_gtf(out_gtf)
 
@@ -75,7 +80,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-s",
                         "--gtf-suffix",
-                        default="_last_exons.gtf",
+                        default=".last_exons.gtf",
                         type=str,
                         help="Suffix string to remove from GTF filenames when assigning source sample ID")
 
@@ -97,6 +102,12 @@ if __name__ == '__main__':
                         dest="le_id_col",
                         help="Name of attribute storing last exon grouping identifier")
 
+    parser.add_argument("--no-last-exon-id",
+                        dest="no_le_id",
+                        action="store_true",
+                        default=False,
+                        help="Whether to skip step to generate a last exon ID attribute based on overlap")
+
     if len(sys.argv) == 1:
         parser.print_help()
         parser.exit()
@@ -107,6 +118,7 @@ if __name__ == '__main__':
          args.sample_id_col,
          args.gtf_suffix,
          args.le_id_col,
+         args.no_le_id,
          args.output_gtf)
 
     end = timer()
