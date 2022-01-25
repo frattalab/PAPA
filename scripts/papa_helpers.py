@@ -362,6 +362,7 @@ def _fetch_attributes(attribute,
                                   "gene_name"],
                       ):
     '''
+    attribute: Series of 'attribute' column string read in from GTF
     '''
 
     assert to_extract[0] == "gene_id", f"gene_id must be the first attribute to extract, following was found - {to_extract[0]}"
@@ -372,12 +373,15 @@ def _fetch_attributes(attribute,
     # Assemble regex
     # Regex completely lifted from _fetch_gene_transcript_exon_id (pr.readers._fetch_gene_transcript_exon_id)
     # https://github.com/biocore-ntnu/pyranges/blob/a36a2c7fac88f297bf41c529734c2cb6950bed3b/pyranges/readers.py#L210
+    # "gene_id.?(.+?);(?:.*transcript_id.?(.+?);)?(?:.*exon_number.?(.+?);)?(?:.*exon_id.?(.+?);)?"
 
-    gene_id = to_extract[0] + ".?(.+?);"
+    gene_id = to_extract[0] + "\s(.+?);"
 
-    others = ["(?:.*" + attr + ".?(.+?);)?" for attr in to_extract[1:]]
+    others = ["(?:.*" + attr + "\s(.+?);)?" for attr in to_extract[1:]]
 
     attr_regex = "".join(list(gene_id) + others)
+
+    # eprint(attr_regex)
 
     df = no_quotes.str.extract(attr_regex,
                                expand=True)  # .iloc[:, [1, 2, 3]]
