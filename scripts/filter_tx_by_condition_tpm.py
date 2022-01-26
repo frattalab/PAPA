@@ -2,7 +2,7 @@
 
 import pyranges as pr
 import pandas as pd
-from papa_helpers import eprint
+from papa_helpers import eprint, _n_ids
 import os
 import sys
 import argparse
@@ -21,16 +21,18 @@ def _filter_gtf(col, output_suffix, tx_id_col="transcript_id", mask_ids=[None]):
     tx_id_col: Name of column/attribute containing transcript IDs
     mask_ids: list of IDs to remove from set of IDs used for filtering
 
-    returns col unmodified (but w)
+    returns col unmodified (but with filtered GTFs output to file)
 
     Intended to be applied internally to col-wise pd.apply with GFFcompare 'tracking' file
     '''
 
     assert output_suffix.endswith(".gtf")
 
-    eprint(f"Filtering following file for valid transcript IDs - {col.name}")
-    gtf = pr.read_gtf(col.name)
+    start = timer()
 
+    eprint(f"Filtering following file for valid transcript IDs - {col.name}")
+
+    gtf = pr.read_gtf(col.name)
 
     ids = set(col) - set(mask_ids)
 
@@ -38,11 +40,18 @@ def _filter_gtf(col, output_suffix, tx_id_col="transcript_id", mask_ids=[None]):
 
     eprint("Filtering for valid transcript IDs...")
 
-    gtf = gtf.filter(lambda df: df[tx_id_col].isin(ids))
+    gtf = gtf.subset(lambda df: df[tx_id_col].isin(ids))
+
+    eprint(f"Number of tx ids in GTF post filter - {_n_ids(gtf, tx_id_col)}")
 
     out_gtf = col.name.rstrip(".gtf") + output_suffix
 
+    eprint(f"Outputting filtered file to - {out_gtf}")
+
     gtf.to_gtf(out_gtf)
+
+    end = timer()
+    eprint(f"Filtering complete - took {end - start} s")
 
     return col
 
@@ -63,6 +72,7 @@ def main(tracking_path,
         samples_list = [line.rstrip("\n") for line in infile]
 
 
+
     # tx_id_in_merged | super locus/gene ID | reference gene ID | overlap class code
     tracking_default_cols = ["transcript_id",
                              "gene_id",
@@ -81,7 +91,10 @@ def main(tracking_path,
     # 5th 'column' is the TPM value
     # q1:PAPA.2|PAPA.2.2|2|0.106867|0.277613|0.795843|535
     eprint("Extracting TPM value from matching transcripts strings...")
-    tracking[samples_list] = tracking[samples_list].apply(lambda x: x.str.split("\|", expand=True)[4], axis=0)
+
+    tpm_samples_list = ["tpm_" + s for s in samples_list]
+
+    tracking[tpm_samples_list] = tracking[samples_list].apply(lambda x: x.str.split("\|", expand=True)[4], axis=0)
 
     #3. Txipts not always found in all samples - replace extracted TPM (None) with 0
     eprint("Replacing missing TPM values (tx not expressed in sample) with 0...")
@@ -90,23 +103,23 @@ def main(tracking_path,
     #4. Calculate mean across samples
     #Convert all sample_cols to numeric
     eprint("Calculating mean TPM per transcript...")
-    tracking = tracking.astype({sample: "float" for sample in samples_list})
+    tracking = tracking.astype({sample: "float" for sample in tpm_samples_list})
 
-    tracking["mean_tpm"] = tracking[samples_list].mean(axis=1)
+    tracking["mean_tpm"] = tracking[tpm_samples_list].mean(axis=1)
 
     #5. Get set of transcripts passing min mean TPM filter
     eprint(f"Filtering transcripts based on min mean TPM - {min_mean_tpm}")
-    eprint(f"Number of transcripts pre mean TPM >= {min_mean_tpm} filter - {len(set(tracking.transcript_id))}")
+    eprint(f"Number of transcripts pre mean TPM >= {min_mean_tpm} filter - {_n_ids(tracking, 'transcript_id', is_df=True)}")
 
-    valid_tx_ids = set(tracking.loc[tracking["mean_tpm"] >= min_mean_tpm,
-                                    "transcript_id"])
+    valid_tx_ids = tracking.loc[tracking["mean_tpm"] >= min_mean_tpm, :]
 
-    eprint(f"Number of transcripts post mean TPM >= {min_mean_tpm} filter - {len(set(valid_tx_ids.transcript_id))}")
+    eprint(f"Number of transcripts post mean TPM >= {min_mean_tpm} filter - {_n_ids(valid_tx_ids, 'transcript_id', is_df=True)}")
 
     # Extract transcript id from the 'tracking' string for each sample
     # 2nd 'column' is the transcript_id in that sample1
     # q1:PAPA.2|PAPA.2.2|2|0.106867|0.277613|0.795843|535
     # Note: if no tx in that sample column contains '-' (split returns None)
+
     valid_tx_ids[samples_list] = (valid_tx_ids[samples_list]
                                   .apply(lambda col: col.str.split("\|", expand=True)[1],
                                          axis="index")
@@ -128,9 +141,6 @@ def main(tracking_path,
     #                 sep="\t",
     #                 index=False,
     #                 header=True)
-
-
-
 
 
 if __name__ == '__main__':
