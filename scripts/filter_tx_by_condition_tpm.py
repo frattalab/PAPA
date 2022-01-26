@@ -50,6 +50,9 @@ def _filter_gtf(col, output_suffix, tx_id_col="transcript_id", mask_ids=[None]):
 
     gtf.to_gtf(out_gtf)
 
+    if not os.path.isfile(out_gtf):
+        raise Exception(f"Writing output GTF to {out_gtf} failed")
+
     end = timer()
     eprint(f"Filtering complete - took {end - start} s")
 
@@ -129,6 +132,13 @@ def main(tracking_path,
     # Each column, read in GTF, filter & output
     # Note: this function returns the series unmodified
     valid_tx_ids[samples_list] = valid_tx_ids[samples_list].apply(lambda col: _filter_gtf(col, gtf_output_suffix), axis="index")
+
+    for s in samples_list:
+        _filter_gtf(valid_tx_ids[s], gtf_output_suffix)
+
+    for s in samples_list:
+        if not os.path.isfile(s.rstrip(".gtf") + gtf_output_suffix):
+            raise Exception(f"Filtered GTF not output for {s}")
 
 
     # #7. Generate TPM matrix & output to file

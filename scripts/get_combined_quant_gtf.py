@@ -38,7 +38,7 @@ def cluster_to_region_number(gr, group_id_col, out_col="le_number", cluster_col=
 
     # Add 1..n 5'-3' region number as a column
     c2p = c2p.assign(out_col,
-                    lambda df: _df_add_region_number(df, group_id_col, cluster_col))
+                     lambda df: _df_add_region_number(df, group_id_col, cluster_col))
 
     # Return 'out_col' to original gr
     c2p_cols = c2p.columns.tolist()

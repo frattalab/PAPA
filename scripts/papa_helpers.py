@@ -21,11 +21,14 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-def _n_ids(gr, id_col):
+def _n_ids(gr, id_col, is_df=False):
 
     assert id_col in gr.columns
 
-    return len(set(gr.as_df()[id_col]))
+    if not is_df:
+        return len(set(gr.as_df()[id_col]))
+    else:
+        return gr[id_col].nunique()
 
 
 def introns_from_df(df):
@@ -459,3 +462,26 @@ def read_gtf_specific(f,
         return PyRanges(df)
     else:
         return df
+
+
+def check_stranded(gr):
+    '''
+    Validate PyRanges object as stranded, removing offending rows if applicable
+    '''
+
+    if gr.stranded:
+        return gr
+
+    else:
+        df = gr.as_df()
+        eprint(f"Input gr is unstranded - 'Strand' values in input gr - {df['Strand'].drop_duplicates().tolist()}")
+
+        df = df.loc[df["Strand"].isin(["+","-"]), :]
+
+        eprint(df['Strand'].drop_duplicates().tolist())
+
+        out_gr = pr.PyRanges(df)
+
+        assert out_gr.stranded
+
+        return out_gr

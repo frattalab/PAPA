@@ -4,7 +4,7 @@ from __future__ import print_function
 import pyranges as pr
 import numpy as np
 import pandas as pd
-from papa_helpers import eprint, add_region_number, get_terminal_regions, _pd_merge_gr, _n_ids
+from papa_helpers import eprint, add_region_number, get_terminal_regions, _pd_merge_gr, _n_ids, check_stranded
 from pyranges.readers import read_gtf_restricted
 from timeit import default_timer as timer
 import argparse
@@ -545,6 +545,9 @@ def main(input_gtf_path,
 
     # eprint(ref_gtf.as_df().info(memory_usage="deep"))
 
+    eprint("Validating reference GTF as stranded (removing  non '+/-' rows if necessary)")
+    ref_gtf = check_stranded(ref_gtf)
+
     eprint(" ".join(["Extracting exons & introns from reference GTF,"
                      "numbering by 5'-3' order along the transcript &",
                      "classifying as 'first', 'internal or 'last' region..."]))
@@ -575,6 +578,9 @@ def main(input_gtf_path,
     end = timer()
 
     eprint(f"Complete - took {end - start} s")
+
+    eprint("Validating input GTF as stranded (removing  non '+/-' rows if necessary)")
+    novel_gtf = check_stranded(novel_gtf)
 
     # eprint(novel_gtf.as_df().info(memory_usage="deep"))
 
@@ -687,7 +693,7 @@ def main(input_gtf_path,
     combined = pr.concat([extensions, spliced_le])
 
     # Output
-    combined.to_gtf(output_prefix + "_last_exons.gtf")
+    combined.to_gtf(output_prefix + ".last_exons.gtf")
 
 
 
@@ -737,7 +743,7 @@ if __name__ == '__main__':
                         "--output-prefix",
                         type=str,
                         default="putative_novel",
-                        help="Name of prefix for output files - GTF  (suffixed with '_last_exons.gtf'), 'match stats' ('_match_stats.tsv')")
+                        help="Name of prefix for output files - GTF  (suffixed with '.last_exons.gtf'), 'match stats' ('.match_stats.tsv')")
 
     parser.add_argument("--trust-input-exon-number",
                         action="store_true",

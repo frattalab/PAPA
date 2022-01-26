@@ -4,7 +4,7 @@
 
 # Path to main (top-level) output directory storing results for this run
 #MUST END WITH SLASH
-main_output_dir: 2021-08-23_two_sample_example_output/
+main_output_dir: 2022-01-25_test_subsample/
 
 # PATH to CSV sample table linking samples to corresponding BAM, FASTQ files etc.
 # 1 row per sample, 4 columns ('<column name>': <description>):
@@ -13,7 +13,7 @@ main_output_dir: 2021-08-23_two_sample_example_output/
 # 'path': path to BAM file containing aligned reads for given sample. BAM files should be coordinate sorted and have a corresponding BAI index file at the same location (suffixed with ‘.bai’)
 # 'fastq1`': path to FASTQ file storing 1st mates of read pairs aligned for same sample
 # 'fastq2': path to FASTQ file storing 2nd mates of read pairs aligned for same sample
-sample_tbl: config/local_ward_ipsc_example_sample_tbl.csv
+sample_tbl: config/subsample_ward_i3_sample_tbl.csv
 
 # What is strandedness of library prep used in samples?
 # "--rf" - library is stranded with read 2 corresponding to transcribed strand ('fr-firststrand'/ 'reverse')
@@ -28,7 +28,7 @@ strandedness: "--rf"
 # - Guide StringTie transcript assembly
 # - Match assembled transcripts to known splice junctions
 # - Quantify reference transcripts with Salmon
-annotation_gtf: data/annotation/gencode.v34.annotation.gtf
+annotation_gtf: data/annotation/gencode.chr8.v34.annotation.gtf
 
 # Source of GTF file of reference transcripts ('annotation_gtf')
 # One of 'gencode' if GENCODE or "ensembl" for ENSEMBL other string
@@ -38,11 +38,11 @@ annotation_source: "gencode"
 # Path to FASTA file containing genome sequence
 # An index file should also exist in same directory (suffixed with .fai)
 # Can be generated using samtools faidx
-genome_fasta: data/annotation/genome.fa
+genome_fasta: data/annotation/chr8_GRCh38.primary_assembly.genome.fa
 
 # Path to BED file containing reference poly(A) site database
 # e.g. PolyASite atlas from 3'-end sequencing
-polya_site_atlas: data/annotation/atlas.clusters.2.0.GRCh38.96.chr_prefix.bed
+polya_site_atlas: data/annotation/atlas.clusters.2.0.GRCh38.96.chr8.chr_prefix.bed
 
 #####-----------------------------------------
 ### GENERAL PIPELINE PARAMETERS
@@ -62,15 +62,21 @@ filter_ref_gtf: True
 # Specify which GTF entries to retain based on attribute keys & values
 # LHS key - name of attribute in GTF (this can vary between Gencode/Ensembl so double check)
 # e.g. gene_type in Gencode vs gene_biotype in Ensembl GTF
-ref_gtf_filters:
-  # put empty list [] if no filtering
-  gene_type: ["protein_coding", "lncRNA"]
-  # Minimum transcript support level for tx to be retained
-  # Put 'None' (no quotes) for no TSL filtering
-  transcript_support_level: 3
-  # 'tag' attribute - which tags should be included/excluded?
-  include_tags: []
-  exclude_tags: ["mRNA_end_NF"]
+ref_gtf_include_flags:
+    # put empty list [] if no filtering
+    gene_type: ["protein_coding", "lncRNA"]
+
+ref_gtf_exclude_flags:
+    # Leave empty for now...
+
+
+# Minimum transcript support level for tx to be retained
+# Put 'None' (no quotes) for no TSL filtering
+min_transcript_support_level: 3
+
+# 'tag' attribute - which tags should be included/excluded?
+include_tags: []
+exclude_tags: ["mRNA_end_NF"]
 
 ###
 # Expression filtering
@@ -84,6 +90,14 @@ min_mean_tpm: 1
 ###
 # Splice junction matching/filtering
 ###
+
+# Tolerance window (nt) to match 5'ends of reference first exons & first exon extension events
+# Predicted 5'ends can be inprecise relative to annotation, this gives some leeway in matching these events
+first_exon_5p_tolerance: 100
+
+# Tolerance window (nt) to match 5'ends of reference exons & overlapping putative last exon
+other_exon_5p_tolerance: 0
+
 
 # when filtering assembled transcripts, valid should have intron chain match up until penultimate intron(s)
 # 'transcript' - NOT YET IMPLEMENTED - introns/splice junctions come from the same transcript
@@ -112,6 +126,11 @@ max_atlas_distance: 100
 
 # Length of region from 3'end (to upstream) to search for presence of polyA signal motifs
 motif_search_region_length: 100
+
+# Expected distance upstream from 3'end for polyA signal motifs (typically enriched ~20nt upstream
+# from cleavage site). If a last exon has multiple found motifs, the 3'end with a motif closest to
+# this value will be selected as the representative 3'end.
+motif_expected_distance: 20
 
 # Which poly(A) signal motifs to use to retain 3'ends with evidence of genuine cleavage event
 # 'Gruber' - 18 conserved motifs (mouse and human) identified by Gruber et al., 2016
@@ -262,4 +281,5 @@ salmon_kmer_size: 31
 stringtie_subdir_name: stringtie/
 salmon_subdir_name: salmon/
 logs_subdir_name: logs/
+benchmarks_subdir_name: benchmarks/
 diff_apa_subdir_name: differential_apa/
