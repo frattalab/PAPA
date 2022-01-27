@@ -476,12 +476,16 @@ def check_stranded(gr):
         df = gr.as_df()
         eprint(f"Input gr is unstranded - 'Strand' values in input gr - {df['Strand'].drop_duplicates().tolist()}")
 
-        df = df.loc[df["Strand"].isin(["+","-"]), :]
+        # Get a list of Strand values that aren't + / -
+        invalid_strand = list(set(df['Strand'].drop_duplicates()) - {"+", "-"})
 
-        eprint(df['Strand'].drop_duplicates().tolist())
+        df = df.loc[df["Strand"].isin(["+", "-"]), :]
 
-        out_gr = pr.PyRanges(df)
+        # PyRanges requires Strand col to have '+' & '-' categories only
+        df["Strand"] = df["Strand"].cat.remove_categories(invalid_strand)
 
-        assert out_gr.stranded
+        gr = pr.PyRanges(df)
 
-        return out_gr
+        assert gr.stranded
+
+        return gr
