@@ -4,7 +4,7 @@ import pyranges as pr
 import pandas as pd
 import numpy as np
 from pyranges.readers import read_gtf_restricted
-from papa_helpers import eprint, get_terminal_regions, get_internal_regions, add_region_number, _df_add_region_number, _pd_merge_gr, read_gtf_specific
+from papa_helpers import eprint, get_terminal_regions, get_internal_regions, add_region_number, _df_add_region_number, _pd_merge_gr, read_gtf_specific, check_concat
 import sys
 import argparse
 from timeit import default_timer as timer
@@ -53,6 +53,25 @@ def cluster_to_region_number(gr, group_id_col, out_col="le_number", cluster_col=
     return out_gr.drop(like="_match$")
 
 
+def _df_add_common_gene_id_col(df, gene_col, novel_id_str, novel_ref_gene_col):
+    '''
+    Internal to add_common_gene_id_col
+    returns pd.Series
+    '''
+
+    if novel_ref_gene_col not in df.columns:
+        # This means chr/strand pair df has no novel entries
+        # gene_col = reference gene col
+        return df[gene_col]
+
+    else:
+        return pd.Series(np.where(df[gene_col].str.contains(novel_id_str, regex=False),
+                                  df[novel_ref_gene_col], # olapping ref gene ID for novel
+                                  df[gene_col] # is a ref gene/last exon
+                                  )
+                         )
+
+
 def add_common_gene_id_col(gr,
                            out_col="ref_gene_id",
                            gene_col="gene_id",
@@ -64,11 +83,7 @@ def add_common_gene_id_col(gr,
     '''
 
     return gr.assign(out_col,
-                     lambda df: pd.Series(np.where(df[gene_col].str.contains(novel_id_str, regex=False),
-                                                   df[novel_ref_gene_col], # olapping ref gene ID for novel
-                                                   df[gene_col] # is a ref gene/last exon
-                                                   )
-                                          )
+                     lambda df: _df_add_common_gene_id_col(df, gene_col, novel_id_str, novel_ref_gene_col)
                      )
 
 
@@ -229,7 +244,12 @@ def main(novel_le_path,
     # Make combined GTF of reference and novel last exons
     # Keeping extensions separate
     combined_ext = pr.concat([ref_le_ext, novel_le_ext])
-    combined_n_ext = pr.concat([ref_le_n_ext, novel_le_n_ext])
+    combined_n_ext = pr.concat([novel_le_n_ext, ref_le_n_ext])
+
+    # Make sure all dfs of gr have same columns (number & labels)
+    # This *should* be the case, but if chr/strand df is unique to one of the concatenated grs then can see different num of cols
+    combined_ext = check_concat(combined_ext)
+    combined_n_ext = check_concat(combined_n_ext)
 
     # Group together overlapping exons with a common identifier
     combined_ext = combined_ext.cluster()

@@ -489,3 +489,37 @@ def check_stranded(gr):
         assert gr.stranded
 
         return gr
+
+
+def check_concat(gr):
+    '''
+    Validate that underlying dfs of (concatenated) PyRanges object have same number of columns
+
+    If dfs do not have same shape, methods like gr.assign will fail due to inconsistent index to add column
+    This heuristic will find the first chr/str with the most columns
+    and update all other chr/str dfs with missing cols from the max filled wih NaNs (making up to same number of cols)
+    '''
+
+    col_lens = {chr_str: len(df.columns) for chr_str, df in gr}
+
+    if len(set(col_lens.values())) == 1:
+        # All columns are of same length
+        return gr
+
+    else:
+        # Some dfs have missing columns
+        # Want to make sure each df has same number (and labels) of columns
+        default_cols = ["Chromosome", "Start", "End", "Strand"]
+
+        # Get all metadata cols from every df in gr
+        # Will be lots of duplicates in here, but this way will avoid massively changing order of columns (from the first df in gr)
+        extra_cols = [col for df in gr.values() for col in df.columns if col not in default_cols]
+
+        # Generate list of target cols without duplicates (preserving order of appearance)
+        all_cols = list(dict.fromkeys(default_cols + extra_cols))
+
+        # Update all dfs so they have same columns (and order)
+        # Col will be filled with NaNs if df didn't have before
+        out_gr = gr.apply(lambda df: df.reindex(columns=all_cols))
+
+        return out_gr
