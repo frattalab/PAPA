@@ -13,7 +13,7 @@ assert config["expression_merge_by"] in ["polyA", "last_exon"], f"'expression_me
 sample_tbl = pd.read_csv(config["sample_tbl"], index_col="sample_name")
 
 SAMPLES = sample_tbl.index.tolist()
-CONDITIONS = sample_tbl["condition"].tolist()
+CONDITIONS = sample_tbl["condition"].drop_duplicates().tolist()
 OPTIONS = sample_tbl.to_dict(orient="index")
 
 GTF = config["annotation_gtf"]
