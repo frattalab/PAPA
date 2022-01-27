@@ -335,10 +335,11 @@ def find_pas_motifs(gr,
                     seq_col="seq",
                     class_outcol="motif_filter",
                     motifs_outcol="pas_motifs",
+                    not_found_str="not_found"
                     ):
     '''
     '''
-
+    assert len(not_found_str) > 0
     assert seq_col in gr.columns
     assert isinstance(pas_motifs, list)
 
@@ -362,10 +363,19 @@ def find_pas_motifs(gr,
                        )
 
     # If no match found then an empty string is output
-    # Add col specifying any match (1) / no match (0)
+    # Empty strings will lead to improper GTF reading in subsequent steps (see reported issue)
+    # Replace empty with not_found_str
+    out_gr = out_gr.assign(motifs_outcol,
+                           lambda df: pd.Series(np.where(df[motifs_outcol] == "",
+                                                         not_found_str,
+                                                         df[motifs_outcol]
+                                                         )
+                                                )
+                           )
 
+    # Add col specifying any match (1) / no match (0)
     out_gr = out_gr.assign(class_outcol,
-                           lambda df: pd.Series(np.where(df[motifs_outcol] != "",
+                           lambda df: pd.Series(np.where(df[motifs_outcol] != not_found_str,
                                                          1,
                                                          0)
                                                )
