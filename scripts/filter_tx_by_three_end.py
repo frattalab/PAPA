@@ -396,7 +396,7 @@ def _str_min_dist_dev_motif(search_str, expected_distance):
     # [-26, -5]
 
     # adjust for difference from expected difference (i.e. vals should be close to 0)
-    dists = [abs(dist + 20) for dist in dists]
+    dists = [abs(dist + expected_distance) for dist in dists]
 
     min_dist = min(dists)
 
