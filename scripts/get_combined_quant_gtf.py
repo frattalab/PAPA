@@ -252,6 +252,7 @@ def main(novel_le_path,
     combined_n_ext = check_concat(combined_n_ext)
 
     # Group together overlapping exons with a common identifier
+    # .cluster(strand=None) groups as ('I') expect i.e. only overlapping intervals on the same strand can be merged
     combined_ext = combined_ext.cluster()
     combined_n_ext = combined_n_ext.cluster()
 
@@ -335,7 +336,7 @@ def main(novel_le_path,
 
     eprint("Generating 'unique regions' for last exons overlapping non-last reference exons...")
 
-    # Need to manually set strandedness to compare on same strand whilst wait for bug fix
+    # Need to manually set strandedness to compare on same strand whilst awaiting clarification on behaviour
     # https://github.com/biocore-ntnu/pyranges/issues/255
     quant_combined = combined.subtract(ref_e_nl, strandedness="same")
 
@@ -352,7 +353,9 @@ def main(novel_le_path,
 
     (quant_combined.as_df()
      [["transcript_id", "ref_gene_id"]]
-     .drop_duplicates().to_csv(output_prefix + ".tx2gene.tsv",
+     .drop_duplicates()
+     .rename(columns={"ref_gene_id": "gene_id"})
+     .to_csv(output_prefix + ".tx2gene.tsv",
                                sep="\t",
                                index=False,
                                header=True)
@@ -376,6 +379,7 @@ def main(novel_le_path,
      [["le_id", "ref_gene_id"]]
      .drop_duplicates()
      .sort_values(by="le_id")
+     .rename(columns={"ref_gene_id": "gene_id"})
      .to_csv(output_prefix + ".le2gene.tsv",
              sep="\t",
              index=False,
