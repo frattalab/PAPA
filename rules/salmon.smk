@@ -20,13 +20,16 @@ rule custom_txome_fasta:
         genome_fa = config["genome_fasta"]
 
     log:
-        os.path.join(LOG_SUBDIR, "custom_txome_fasta.log")
+        os.path.join(LOG_SUBDIR,
+                     config["salmon_subdir_name"],
+                     "custom_txome_fasta.log")
 
     conda:
         "../envs/papa.yaml"
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["salmon_subdir_name"],
                      "custom_txome_fasta.txt")
 
     shell:
@@ -52,10 +55,13 @@ rule generate_full_decoys:
         decoys = os.path.join(SALMON_SUBDIR, "decoys.txt")
 
     log:
-        os.path.join(LOG_SUBDIR, "generate_full_decoys.log")
+        os.path.join(LOG_SUBDIR,
+                     config["salmon_subdir_name"],
+                     "generate_full_decoys.log")
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["salmon_subdir_name"],
                      "generate_full_decoys.txt")
 
     shell:
@@ -87,10 +93,13 @@ rule salmon_index:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "salmon_index.log")
+        os.path.join(LOG_SUBDIR,
+                     config["salmon_subdir_name"],
+                     "salmon_index.log")
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["salmon_subdir_name"],
                      "salmon_index.txt")
 
     shell:
@@ -126,10 +135,13 @@ rule salmon_quant_pe:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "salmon_quant_pe.{sample}.log")
+        os.path.join(LOG_SUBDIR,
+                     config["salmon_subdir_name"],
+                     "salmon_quant_pe.{sample}.log")
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["salmon_subdir_name"],
                      "salmon_quant_pe.{sample}.txt")
 
     shell:

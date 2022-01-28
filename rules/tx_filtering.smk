@@ -6,8 +6,8 @@ rule gtf_list_by_condition:
                                  sample=get_condition_samples(wildcards.condition, OPTIONS))
 
     output:
-        txt = os.path.join(STRINGTIE_SUBDIR,
-#                           "{condition}",
+        txt = os.path.join(TX_FILT_SUBDIR,
+                           "{condition}",
                            "gtf_list_{condition}.txt")
 
     group:
@@ -24,20 +24,18 @@ rule merge_by_condition:
     '''
     input:
         rules.gtf_list_by_condition.output.txt
-        # os.path.join(STRINGTIE_SUBDIR,
-        #              "min_jnc_{min_jnc}",
-        #              "min_frac_{min_frac}",
-        #              "min_cov_{min_cov}",
-        #              "gtf_list_{condition}.txt")
 
     output:
-        gtf = temp(os.path.join(STRINGTIE_SUBDIR,
-                           "{condition}.all_samples.combined.gtf")),
-        tracking = os.path.join(STRINGTIE_SUBDIR,
+        gtf = temp(os.path.join(TX_FILT_SUBDIR,
+                                "{condition}",
+                                "{condition}.all_samples.combined.gtf")),
+        tracking = os.path.join(TX_FILT_SUBDIR,
+                                "{condition}",
                                 "{condition}.all_samples.tracking")
 
     params:
-        out_prefix = os.path.join(STRINGTIE_SUBDIR,
+        out_prefix = os.path.join(TX_FILT_SUBDIR,
+                                  "{condition}",
                                   "{condition}.all_samples"),
         label = config["label"]
 
@@ -46,10 +44,14 @@ rule merge_by_condition:
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["tx_filtering_subdir_name"],
+                     "{condition}",
                      "{condition}_merge_by_condition.txt")
 
     log:
         os.path.join(LOG_SUBDIR,
+                     config["tx_filtering_subdir_name"],
+                     "{condition}",
                      "{condition}_merge_by_condition.log")
 
     group:
@@ -76,25 +78,20 @@ rule tx_condition_mean_tpm_filter:
 
     Note: the '.done' dummy file is a hacky solution to ensure that the rule runs once per condition,
     as I couldn't find a way to propagate the 'sample' wildcard (but to only expect 'sample' belonging to the condition)
-    The script will output per-sample files, but a downstream dummy rule will check this
+    The script will output per-sample files, but a downstream dummy rule will check these have been created
     '''
     input:
-        tracking = os.path.join(STRINGTIE_SUBDIR,
+        tracking = os.path.join(TX_FILT_SUBDIR,
+                                "{condition}",
                                 "{condition}.all_samples.tracking"),
-        gtf_list = os.path.join(STRINGTIE_SUBDIR,
+        gtf_list = os.path.join(TX_FILT_SUBDIR,
+                                "{condition}",
                                 "gtf_list_{condition}.txt"),
 
     output:
-        dummy = temp(os.path.join(STRINGTIE_SUBDIR, "{condition}_mean_tpm.done")),
-        # expand(os.path.join(STRINGTIE_SUBDIR,
-        #                     "{condition}",
-        #                     "{sample}.mean_tpm_filtered.gtf"
-        #                     ),
-        #        sample=get_condition_samples("{condition}", OPTIONS),
-        #        )
-
-    # wildcard_constraints:
-    #     sample = get_condition_samples("{condition}", OPTIONS)
+        dummy = temp(os.path.join(TX_FILT_SUBDIR,
+                                  "{condition}",
+                                  "{condition}_mean_tpm.done")),
 
     params:
         script = "scripts/filter_tx_by_condition_tpm.py",
@@ -107,10 +104,14 @@ rule tx_condition_mean_tpm_filter:
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["tx_filtering_subdir_name"],
+                     "{condition}",
                      "{condition}_tx_condition_mean_tpm_filter.txt")
 
     log:
         os.path.join(LOG_SUBDIR,
+                     config["tx_filtering_subdir_name"],
+                     "{condition}",
                      "{condition}_tx_condition_mean_tpm_filter.log")
 
     group:
@@ -126,20 +127,25 @@ rule tx_condition_mean_tpm_filter:
         &> {log} && touch {output.dummy}
         """
 
+
 rule check_per_sample_mean_tpm_filtered:
     '''
     Dummy rule to ensure per-sample mean tpm filtered GTF files have been generated
     Simply exits with error code if expected file doesn't exist
     '''
     input:
-        lambda wildcards: os.path.join(STRINGTIE_SUBDIR,
+        lambda wildcards: os.path.join(TX_FILT_SUBDIR,
+                                       OPTIONS[wildcards.sample]["condition"],
                                        OPTIONS[wildcards.sample]["condition"] + "_mean_tpm.done")
     output:
-        os.path.join(STRINGTIE_SUBDIR, "mv.{sample}.assembled.mean_tpm_filtered.gtf")
+        os.path.join(STRINGTIE_SUBDIR,
+                     "mv.{sample}.assembled.mean_tpm_filtered.gtf")
 
     log:
         os.path.join(LOG_SUBDIR,
+                     config["tx_filtering_subdir_name"],
                      "{sample}_check_per_sample_mean_tpm_filtered.log")
+
     shell:
         """
         # Remove the '.mv' from output name - this is file output by previous rule
@@ -166,7 +172,7 @@ rule get_novel_last_exons:
         ref_gtf = rules.filter_ref_gtf.output if config["filter_ref_gtf"] else GTF
 
     output:
-        os.path.join(STRINGTIE_SUBDIR,
+        os.path.join(TX_FILT_SUBDIR,
                      "{condition}",
                      "{sample}.last_exons.gtf")
 
@@ -177,7 +183,7 @@ rule get_novel_last_exons:
         other_ex_5p_tolerance = config["other_exon_5p_tolerance"],
         trust_input_exon_number = "",
         trust_ref_exon_number = "",
-        out_prefix = os.path.join(STRINGTIE_SUBDIR,
+        out_prefix = os.path.join(TX_FILT_SUBDIR,
                                   "{condition}",
                                   "{sample}")
 
@@ -186,11 +192,13 @@ rule get_novel_last_exons:
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["tx_filtering_subdir_name"],
                      "{condition}",
                      "{sample}.get_novel_last_exons.txt")
 
     log:
         os.path.join(LOG_SUBDIR,
+                     config["tx_filtering_subdir_name"],
                      "{condition}",
                      "{sample}.get_novel_last_exons.log")
 
@@ -216,14 +224,15 @@ rule combine_novel_by_condition:
     Concatenate last exons across samples of the same condition, grouping overlapping last exons across samples with a common identifier
     '''
     input:
-        gtfs = lambda wildcards: expand(os.path.join(STRINGTIE_SUBDIR,
+        gtfs = lambda wildcards: expand(os.path.join(TX_FILT_SUBDIR,
                                                      wildcards.condition,
                                                      "{sample}.last_exons.gtf"
                                                      ),
                                         sample = get_condition_samples(wildcards.condition, OPTIONS))
 
     output:
-        os.path.join(STRINGTIE_SUBDIR,
+        os.path.join(TX_FILT_SUBDIR,
+                     "{condition}",
                      "{condition}.merged_last_exons.gtf"
                      )
 
@@ -238,10 +247,14 @@ rule combine_novel_by_condition:
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["tx_filtering_subdir_name"],
+                     "{condition}",
                      "{condition}_combine_novel_by_condition.txt")
 
     log:
         os.path.join(LOG_SUBDIR,
+                     config["tx_filtering_subdir_name"],
+                     "{condition}",
                      "{condition}_combine_novel_by_condition.log")
 
     group:
@@ -265,14 +278,16 @@ rule three_end_filter:
     """
 
     input:
-        gtf = os.path.join(STRINGTIE_SUBDIR,
+        gtf = os.path.join(TX_FILT_SUBDIR,
+                           "{condition}",
                            "{condition}.merged_last_exons.gtf"
                            ),
         fasta = config["genome_fasta"],
         atlas = config["polya_site_atlas"]
 
     output:
-        gtf = os.path.join(STRINGTIE_SUBDIR,
+        gtf = os.path.join(TX_FILT_SUBDIR,
+                           "{condition}",
                            "{condition}.merged_last_exons.3p_end_filtered.gtf"),
 
     params:
@@ -281,7 +296,8 @@ rule three_end_filter:
         max_atl_dist = config["max_atlas_distance"],
         motif_len = config["motif_search_region_length"],
         motif_exp_dist = config["motif_expected_distance"],
-        output_prefix = os.path.join(STRINGTIE_SUBDIR,
+        output_prefix = os.path.join(TX_FILT_SUBDIR,
+                                     "{condition}",
                                      "{condition}.merged_last_exons.3p_end_filtered")
 
     conda:
@@ -289,10 +305,14 @@ rule three_end_filter:
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["tx_filtering_subdir_name"],
+                     "{condition}",
                      "{condition}_three_end_filter.txt")
 
     log:
         os.path.join(LOG_SUBDIR,
+                     config["tx_filtering_subdir_name"],
+                     "{condition}",
                      "{condition}_three_end_filter.log")
 
     group:
@@ -318,12 +338,13 @@ rule combine_novel_filtered_by_condition:
     Combine 3'end filtered last exons across conditions into a single GTF file
     '''
     input:
-        expand(os.path.join(STRINGTIE_SUBDIR,
+        expand(os.path.join(TX_FILT_SUBDIR,
+                            "{condition}",
                             "{condition}.merged_last_exons.3p_end_filtered.gtf"),
                             condition=CONDITIONS)
 
     output:
-        gtf = os.path.join(STRINGTIE_SUBDIR,
+        gtf = os.path.join(TX_FILT_SUBDIR,
                            "all_conditions.merged_last_exons.3p_end_filtered.gtf")
 
     params:
@@ -337,10 +358,12 @@ rule combine_novel_filtered_by_condition:
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["tx_filtering_subdir_name"],
                      "combine_novel_filtered_by_condition.txt")
 
     log:
         os.path.join(LOG_SUBDIR,
+                     config["tx_filtering_subdir_name"],
                      "combine_novel_filtered_by_condition.log")
 
     group:
@@ -369,16 +392,16 @@ rule get_combined_quant_gtf:
         ref_gtf = rules.filter_ref_gtf.output if config["filter_ref_gtf"] else GTF
 
     output:
-        quant_gtf = os.path.join(STRINGTIE_SUBDIR,
+        quant_gtf = os.path.join(TX_FILT_SUBDIR,
                                  "novel_ref_combined.quant.last_exons.gtf"),
-        le_gtf = os.path.join(STRINGTIE_SUBDIR, "novel_ref_combined.last_exons.gtf"),
-        tx2le = os.path.join(STRINGTIE_SUBDIR, "novel_ref_combined.tx2le.tsv"),
-        tx2gene = os.path.join(STRINGTIE_SUBDIR, "novel_ref_combined.tx2gene.tsv"),
-        le2gene = os.path.join(STRINGTIE_SUBDIR, "novel_ref_combined.le2gene.tsv")
+        le_gtf = os.path.join(TX_FILT_SUBDIR, "novel_ref_combined.last_exons.gtf"),
+        tx2le = os.path.join(TX_FILT_SUBDIR, "novel_ref_combined.tx2le.tsv"),
+        tx2gene = os.path.join(TX_FILT_SUBDIR, "novel_ref_combined.tx2gene.tsv"),
+        le2gene = os.path.join(TX_FILT_SUBDIR, "novel_ref_combined.le2gene.tsv")
 
     params:
         script = "scripts/get_combined_quant_gtf.py",
-        output_prefix = os.path.join(STRINGTIE_SUBDIR,
+        output_prefix = os.path.join(TX_FILT_SUBDIR,
                                      "novel_ref_combined"),
         trust_ref_exon_number = ""
 
@@ -387,10 +410,12 @@ rule get_combined_quant_gtf:
 
     benchmark:
         os.path.join(BMARK_SUBDIR,
+                     config["tx_filtering_subdir_name"],
                      "get_combined_quant_gtf.txt")
 
     log:
         os.path.join(LOG_SUBDIR,
+                     config["tx_filtering_subdir_name"],
                      "get_combined_quant_gtf.log")
 
     shell:
@@ -402,72 +427,3 @@ rule get_combined_quant_gtf:
         -o {params.output_prefix} \
         &> {log}
         """
-
-
-
-# rule intron_chain_filter:
-#     """
-#     Filter novel transcripts for those with matching intron chains to reference transcripts up until their penultimate introns (i.e. novel last exons)
-#     """
-#     input:
-#         gtf = os.path.join(STRINGTIE_SUBDIR,
-#                            "min_jnc_{min_jnc}",
-#                            "min_frac_{min_frac}",
-#                            "min_cov_{min_cov}",
-#                            "tpm_filtered.all_samples.combined.gtf")
-#
-#     output:
-#         gtf = os.path.join(STRINGTIE_SUBDIR,
-#                            "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}",
-#                            "tpm_filtered.intron_chain_filtered.all_samples.combined.gtf"),
-#         match_stats = os.path.join(STRINGTIE_SUBDIR,
-#                                    "min_jnc_{min_jnc}", "min_frac_{min_frac}", "min_cov_{min_cov}",
-#                                    "tpm_filtered.intron_chain_filtered.all_samples.combined.match_stats.tsv")
-#
-#     params:
-#         script = "scripts/filter_tx_by_intron_chain.py",
-#         ref_gtf = GTF,
-#         annot_source = config["annotation_source"],
-#         match_by = config["intron_chain_filter_mode"],
-#         max_terminal_non_match = config["max_terminal_non_match"],
-#         min_ext_length = config["min_extension_length"],
-#         out_prefix = os.path.join(STRINGTIE_SUBDIR,
-#                                   "min_jnc_{min_jnc}",
-#                                   "min_frac_{min_frac}",
-#                                   "min_cov_{min_cov}",
-#                                   "tpm_filtered.intron_chain_filtered.all_samples.combined")
-#
-#     conda:
-#         "../envs/papa.yaml"
-#
-#     log:
-#         os.path.join(LOG_SUBDIR,
-#                      "min_jnc_{min_jnc}",
-#                      "min_frac_{min_frac}",
-#                      "min_cov_{min_cov}",
-#                      "intron_chain_filter.log")
-#
-#     resources:
-#         threads = config["intron_chain_filter_threads"]
-#
-#     group:
-#         "transcript_filtering_chain_3p"
-#
-#     shell:
-#         """
-#         # remove undefined strand rows from novel GTF
-#         awk '{{if ($7!=".") {{print $0}} }}' {input} > {input}.tmp
-#
-#         python {params.script} \
-#         -i {input}.tmp \
-#         -r {params.ref_gtf} \
-#         -s {params.annot_source} \
-#         -m {params.match_by} \
-#         -n {params.max_terminal_non_match} \
-#         -e {params.min_ext_length} \
-#         -c {resources.threads} \
-#         -o {params.out_prefix} \
-#         2> {log}
-#
-#         rm {input}.tmp
-#         """

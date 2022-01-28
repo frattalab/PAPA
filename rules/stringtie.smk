@@ -17,7 +17,7 @@ rule stringtie:
     params:
         point_feats = "--ptf " + config["polya_site_point_features"] if config["use_point_features"] else "",
         strandedness = config["strandedness"],
-        label = config["label"],
+        label = config["label"] + "." + "{sample}",
         min_iso_frac = config["min_isoform_fraction_abundance"],
         min_iso_len = config["min_isoform_length"],
         gene_abund = lambda wildcards: " ".join(["-A", os.path.join(STRINGTIE_SUBDIR,
@@ -43,7 +43,14 @@ rule stringtie:
         "../envs/papa.yaml"
 
     log:
-        os.path.join(LOG_SUBDIR, "{sample}.stringtie.log")
+        os.path.join(LOG_SUBDIR,
+                     config["stringtie_subdir_name"],
+                     "{sample}.stringtie.log")
+
+    benchmark:
+        os.path.join(BMARK_SUBDIR,
+                     config["stringtie_subdir_name"],
+                     "{sample}.stringtie.txt")
 
     shell:
         """

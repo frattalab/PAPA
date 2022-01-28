@@ -279,6 +279,7 @@ salmon_kmer_size: 31
 # No need to change these unless you don't like them!
 
 stringtie_subdir_name: stringtie/
+tx_filtering_subdir_name: tx_filtering/
 salmon_subdir_name: salmon/
 logs_subdir_name: logs/
 benchmarks_subdir_name: benchmarks/

@@ -7,7 +7,7 @@ configfile: "config/config.yaml"
 include: "rules/parse_config.py"
 
 
-assert config["expression_merge_by"] in ["polyA", "last_exon"], f"'expression_merge_by' must be one of 'polyA' or 'last_exon' - {config['expression_merge_by']} was passed"
+assert config["expression_merge_by"] == "last_exon", f"'expression_merge_by' must be 'last_exon' ('polyA' is now deprecated) - {config['expression_merge_by']} was passed"
 
 
 sample_tbl = pd.read_csv(config["sample_tbl"], index_col="sample_name")
@@ -21,6 +21,7 @@ GTF = config["annotation_gtf"]
 # Make sure it has a slash at end of path
 OUTPUT_DIR = os.path.join(config["main_output_dir"], "")
 STRINGTIE_SUBDIR = os.path.join(OUTPUT_DIR, config["stringtie_subdir_name"], "")
+TX_FILT_SUBDIR = os.path.join(OUTPUT_DIR, config["tx_filtering_subdir_name"], "")
 SALMON_SUBDIR = os.path.join(OUTPUT_DIR, config["salmon_subdir_name"], "")
 LOG_SUBDIR = os.path.join(OUTPUT_DIR, config["logs_subdir_name"], "")
 BMARK_SUBDIR = os.path.join(OUTPUT_DIR, config["benchmarks_subdir_name"], "")
@@ -50,36 +51,12 @@ wildcard_constraints:
 
 rule all:
     input:
-        # expand(os.path.join(STRINGTIE_SUBDIR,
-        #                     "min_jnc_{min_jnc}",
-        #                     "min_frac_{min_frac}",
-        #                     "min_cov_{min_cov}",
-        #                     # "{condition}",
-        #                     "{condition}.min_mean_tpm_filtered.gtf"),
-        #        condition=CONDITIONS,
-        #        min_jnc=min_jnc_vals,
-        #        min_frac=min_frac_vals,
-        #        min_cov=min_cov_vals),
-        # expand(os.path.join(SALMON_SUBDIR,
-        #                      "pas_quant",
-        #                      "min_jnc_{min_jnc}",
-        #                      "min_frac_{min_frac}",
-        #                      "min_cov_{min_cov}",
-        #                      "summarised_pas_quantification.tsv"),
-        #        min_jnc=min_jnc_vals,
-        #        min_frac=min_frac_vals,
-        #        min_cov=min_cov_vals),
-        expand(os.path.join(SALMON_SUBDIR, "quant", "{sample}", "quant.sf"),
-               sample=SAMPLES,
-               ),
-        # expand(os.path.join(STRINGTIE_SUBDIR,
-        #                     "min_jnc_{min_jnc}",
-        #                     "min_frac_{min_frac}",
-        #                     "min_cov_{min_cov}",
-        #                     "tpm_filtered.intron_chain_filtered.3p_end_filtered.all_samples.combined.gtf"),
-        #        min_jnc=min_jnc_vals,
-        #        min_frac=min_frac_vals,
-        #        min_cov=min_cov_vals)
+        os.path.join(DAPA_SUBDIR,
+                     "summarised_pas_quantification.counts.tsv"),
+        # expand(os.path.join(SALMON_SUBDIR, "quant", "{sample}", "quant.sf"),
+        #        sample=SAMPLES,
+        #        ),
+
 
 
 # def get_stringtie_assembled(sample, output_dir):
