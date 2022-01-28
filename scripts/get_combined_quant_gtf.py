@@ -334,7 +334,10 @@ def main(novel_le_path,
                          )
 
     eprint("Generating 'unique regions' for last exons overlapping non-last reference exons...")
-    quant_combined = combined.subtract(ref_e_nl)
+
+    # Need to manually set strandedness to compare on same strand whilst wait for bug fix
+    # https://github.com/biocore-ntnu/pyranges/issues/255
+    quant_combined = combined.subtract(ref_e_nl, strandedness="same")
 
     # eprint(combined)
     # eprint(quant_combined)
