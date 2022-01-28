@@ -211,7 +211,7 @@ def no_overlap_3p_ids(gr, overlaps_gr, id_col="transcript_id"):
 
     gr_3p = gr.three_end()
 
-    gr_3p = gr_3p.overlap(overlaps_gr, invert=True)
+    gr_3p = gr_3p.overlap(overlaps_gr, strandedness="same", invert=True)
 
     return set(gr_3p.as_df()[id_col])
 
@@ -330,7 +330,7 @@ def _df_add_event_type(df, id_col, rank_col, rkey2key, collapse_by_id=True):
 
             to_join = (to_join.groupby(id_col)
                        ["event_type_decision"]
-                       .agg(lambda x: ",".join(list(set(x))))
+                       .agg(lambda x: ",".join(sorted(set(x)))) # sorted converts set --> list
                        .reset_index() #return tx_id to column
                        )
 
@@ -445,7 +445,7 @@ def find_spliced_events(novel_li,
     ref_to_drop = [col if col not in not_cols else col + suffix for col in ref_cols]
 
     # Only novel last SJs overlapping ref SJs kept
-    novel_spliced = novel_li.join(ref_introns, suffix=suffix)
+    novel_spliced = novel_li.join(ref_introns, strandedness="same", suffix=suffix)
 
     eprint(f"Number of putative novel spliced events - {_n_ids(novel_spliced, id_col)}")
     # eprint(f"ref exon ranks\n {novel_spliced.as_df()[rank_col].drop_duplicates()}")
