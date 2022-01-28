@@ -202,8 +202,8 @@ rule get_novel_last_exons:
                      "{condition}",
                      "{sample}.get_novel_last_exons.log")
 
-    group:
-        "transcript_filtering_tpm"
+    # group:
+    #     "transcript_filtering_events"
 
     shell:
         """
@@ -258,7 +258,7 @@ rule combine_novel_by_condition:
                      "{condition}_combine_novel_by_condition.log")
 
     group:
-        "transcript_filtering_tpm"
+        "transcript_filtering_3p"
 
     shell:
         """
@@ -316,7 +316,7 @@ rule three_end_filter:
                      "{condition}_three_end_filter.log")
 
     group:
-        "transcript_filtering_chain_3p"
+        "transcript_filtering_3p"
 
     shell:
         """
@@ -367,7 +367,7 @@ rule combine_novel_filtered_by_condition:
                      "combine_novel_filtered_by_condition.log")
 
     group:
-        "transcript_filtering_chain_3p"
+        "transcript_filtering_3p"
 
     shell:
         """

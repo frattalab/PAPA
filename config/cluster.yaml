@@ -4,13 +4,19 @@ __default__:
   h_rt:  2:00:00
   submission_string: " "
 
+filter_ref_gtf:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  4:00:00
+  submission_string: " "
+
 stringtie:
   h_vmem: 14G
   tmem: 14G
   h_rt:  8:00:00
   submission_string: " "
 
-intron_chain_filter:
+get_novel_last_exons:
   h_vmem: 10G
   tmem: 10G
   h_rt:  8:00:00
@@ -22,7 +28,7 @@ transcript_filtering_tpm:
   h_rt:  8:00:00
   submission_string: " "
 
-transcript_filtering_chain_3p:
+transcript_filtering_3p:
   h_vmem: 14G
   tmem: 14G
   h_rt:  8:00:00
@@ -40,9 +46,9 @@ merge_by_condition:
   h_rt:  4:00:00
   submission_string: " "
 
-merge_filtered_with_ref:
-  h_vmem: 6G
-  tmem: 6G
+get_combined_quant_gtf:
+  h_vmem: 8G
+  tmem: 8G
   h_rt:  4:00:00
   submission_string: " "
 
