@@ -50,7 +50,7 @@ if (isFALSE(all(file.exists(quant_paths)))) {
 }
 
 #2 read in tx2pas
-tx2pas <- read.table(opt$tx2pas,
+tx2pas <- read.table(opt$tx2le,
                      header = T,
                      sep = "\t",
                      stringsAsFactors = FALSE)
