@@ -339,34 +339,48 @@ def main(novel_le_path,
     # https://github.com/biocore-ntnu/pyranges/issues/255
     quant_combined = combined.subtract(ref_e_nl, strandedness="same")
 
+    # Some le_ids can be dropped if they are completely contained within non-last exons
+    le_ids_dropped = set(combined.le_id) - set(quant_combined.le_id)
+    eprint(f"Number of last exon IDs dropped due to complete containment inside ref overlapping exons - {len(le_ids_dropped)}")
+
     # eprint(combined)
     # eprint(quant_combined)
 
     eprint("Generating tx2le, le2gene assignment tables...")
 
     eprint(f"Writing 'tx2gene' (transcript_id | gene_id) to TSV... - {output_prefix + '.tx2gene.tsv'}")
-    quant_combined.as_df()[["transcript_id",
-                            "ref_gene_id"]].drop_duplicates().to_csv(output_prefix + ".tx2gene.tsv",
-                                                                     sep="\t",
-                                                                     index=False,
-                                                                     header=True)
+
+    (quant_combined.as_df()
+     [["transcript_id", "ref_gene_id"]]
+     .drop_duplicates().to_csv(output_prefix + ".tx2gene.tsv",
+                               sep="\t",
+                               index=False,
+                               header=True)
+     )
 
 
     eprint(f"Writing 'tx2le' (transcript_id | pas_id) to TSV... - {output_prefix + '.tx2le.tsv'}")
 
-    quant_combined.as_df()[["transcript_id",
-                            "le_id"]].drop_duplicates().to_csv(output_prefix + ".tx2le.tsv",
-                                                               sep="\t",
-                                                               index=False,
-                                                               header=True)
-
+    (quant_combined.as_df()
+     [["transcript_id", "le_id"]]
+     .drop_duplicates()
+     .sort_values(by="le_id")
+     .to_csv(output_prefix + ".tx2le.tsv",
+             sep="\t",
+             index=False,
+             header=True)
+     )
 
     eprint(f"Writing 'le2gene' (le_id | gene_id) to TSV... - {output_prefix + '.le2gene.tsv'}")
-    quant_combined.as_df()[["le_id",
-                            "ref_gene_id"]].drop_duplicates().to_csv(output_prefix + ".le2gene.tsv",
-                                                                     sep="\t",
-                                                                     index=False,
-                                                                     header=True)
+    (quant_combined.as_df()
+     [["le_id", "ref_gene_id"]]
+     .drop_duplicates()
+     .sort_values(by="le_id")
+     .to_csv(output_prefix + ".le2gene.tsv",
+             sep="\t",
+             index=False,
+             header=True)
+     )
 
 
 
