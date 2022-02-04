@@ -10,7 +10,13 @@ rule tx_to_le_quant:
 
     output:
         os.path.join(DAPA_SUBDIR,
-                     "summarised_pas_quantification.counts.tsv")
+                     "summarised_pas_quantification.counts.tsv"),
+        os.path.join(DAPA_SUBDIR,
+                     "summarised_pas_quantification.tpm.tsv"),
+        os.path.join(DAPA_SUBDIR,
+                     "summarised_pas_quantification.ppau.tsv"),
+        os.path.join(DAPA_SUBDIR,
+                     "summarised_pas_quantification.gene_tpm.tsv"),
 
     params:
         script = "scripts/tx_to_polya_quant.R",

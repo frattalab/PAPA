@@ -53,6 +53,12 @@ rule all:
     input:
         os.path.join(DAPA_SUBDIR,
                      "summarised_pas_quantification.counts.tsv"),
+        os.path.join(DAPA_SUBDIR,
+                     "summarised_pas_quantification.tpm.tsv"),
+        os.path.join(DAPA_SUBDIR,
+                     "summarised_pas_quantification.ppau.tsv"),
+        os.path.join(DAPA_SUBDIR,
+                     "summarised_pas_quantification.gene_tpm.tsv")
         # expand(os.path.join(SALMON_SUBDIR, "quant", "{sample}", "quant.sf"),
         #        sample=SAMPLES,
         #        ),
