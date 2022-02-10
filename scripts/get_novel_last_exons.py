@@ -4,7 +4,7 @@ from __future__ import print_function
 import pyranges as pr
 import numpy as np
 import pandas as pd
-from papa_helpers import eprint, add_region_number, get_terminal_regions, _pd_merge_gr, _n_ids, check_stranded
+from papa_helpers import eprint, add_region_number, get_terminal_regions, _pd_merge_gr, _n_ids, check_stranded, read_gtf_specific
 from pyranges.readers import read_gtf_restricted
 from timeit import default_timer as timer
 import argparse
@@ -254,8 +254,8 @@ def add_3p_extension_length(gr,
                      nb_cpu=nb_cpu)
 
     joined = joined.assign(out_col,
-                           lambda df: df["End"] - df["End_b"] if (df["Strand"] == "+").all() else
-                           df["Start_b"] - df["Start"],
+                           lambda df: df["End"] - df["End" + suffix] if (df["Strand"] == "+").all() else
+                           df["Start" + suffix] - df["Start"],
                            nb_cpu=nb_cpu)
 
 
@@ -272,7 +272,7 @@ def add_3p_extension_length(gr,
     return joined.drop(ref_to_drop)
 
 
-def _df_5p_end_tolerance(df, rank_col, first_key, first_5p_tolerance, other_5p_tolerance):
+def _df_5p_end_tolerance(df, rank_col, first_key, first_5p_tolerance, other_5p_tolerance, suffix):
     '''
     '''
 
@@ -282,16 +282,16 @@ def _df_5p_end_tolerance(df, rank_col, first_key, first_5p_tolerance, other_5p_t
         #               (df[rank_col] != first_key) & (abs(df["Start"] - df["Start_b"]) <= other_5p_tolerance)
         #               ]
         # choices = [True, True]
-        decisions = np.where((df[rank_col] == first_key) & (abs(df["Start"] - df["Start_b"]) <= first_5p_tolerance) |
-                             (df[rank_col] != first_key) & (abs(df["Start"] - df["Start_b"]) <= other_5p_tolerance),
+        decisions = np.where((df[rank_col] == first_key) & (abs(df["Start"] - df["Start" + suffix]) <= first_5p_tolerance) |
+                             (df[rank_col] != first_key) & (abs(df["Start"] - df["Start" + suffix]) <= other_5p_tolerance),
                              True,
                              False
                              )
 
     elif (df["Strand"] == "-").all():
         # 5'end = End
-        decisions = np.where((df[rank_col] == first_key) & (abs(df["End"] - df["End_b"]) <= first_5p_tolerance) |
-                             (df[rank_col] != first_key) & (abs(df["End"] - df["End_b"]) <= other_5p_tolerance),
+        decisions = np.where((df[rank_col] == first_key) & (abs(df["End"] - df["End" + suffix]) <= first_5p_tolerance) |
+                             (df[rank_col] != first_key) & (abs(df["End"] - df["End" + suffix]) <= other_5p_tolerance),
                              True,
                              False
                              )
@@ -349,12 +349,15 @@ def find_extension_events(novel_le,
                           min_extension_length,
                           first_5p_tolerance,
                           other_5p_tolerance,
+                          tolerance_filter=True,
+                          return_filtered_ids=True,
                           id_col="transcript_id",
                           rank_col="region_rank",
                           event_type_outcol="event_type",
                           first_key="first_exon_extension",
                           internal_key="internal_exon_extension",
-                          last_key="last_exon_extension"):
+                          last_key="last_exon_extension",
+                          suffix="_ref"):
     '''
     Return gr with last exons that extend a reference exon
     Criteria:
@@ -371,8 +374,12 @@ def find_extension_events(novel_le,
 
     # Find events extending 3'ends of ref exon, add 3p_extension_length (nt) column
     # 1 length per le returned (smallest)
-    novel_le_ext = add_3p_extension_length(novel_le, ref_exons)
-    eprint(f"Number of events with any 3' ref exon extension - {_n_ids(novel_le_ext, id_col)}")
+    # Events with no overlap with ref exons are dropped
+    novel_le_ext = add_3p_extension_length(novel_le, ref_exons, suffix=suffix)
+
+    pre_len_ids = set(novel_le_ext.as_df()[id_col])
+
+    eprint(f"Number of events with any 3' ref exon extension - {len(pre_len_ids)}")
 
     ext_len_dist = (novel_le_ext.as_df()
                     ["3p_extension_length"]
@@ -383,20 +390,37 @@ def find_extension_events(novel_le,
 
     # Subset for extensions of min length
     novel_le_ext = novel_le_ext.subset(lambda df: df["3p_extension_length"] >= min_extension_length)
+    post_len_ids = set(novel_le_ext.as_df()[id_col])
 
-    eprint(f"After minimum length filter - {min_extension_length} - number of extension events - {_n_ids(novel_le_ext, id_col)}")
+    eprint(f"After minimum length filter - {min_extension_length} - number of extension events - {len(post_len_ids)}")
 
-    # Check 5'ends overlap within given tolerance
-    novel_le_ext = novel_le_ext.subset(lambda df: _df_5p_end_tolerance(df,
-                                                                       rank_col,
-                                                                       first_key,
-                                                                       first_5p_tolerance,
-                                                                       other_5p_tolerance
-                                                                       )
-                                       )
 
-    eprint(f"After 5'end match tolerance filter, number of events - {_n_ids(novel_le_ext, id_col)}")
+    if return_filtered_ids:
+        # Track IDs which do not pass min length filter
+        # In ds steps (e.g. finding spliced events, they could be considered 'spliced' events because no ref overlap, & ref last intron matches novel last intron)
+        min_len_filt_ids = pre_len_ids - post_len_ids
 
+    if tolerance_filter:
+        # Check 5'ends overlap within given tolerance
+        novel_le_ext = novel_le_ext.subset(lambda df: _df_5p_end_tolerance(df,
+                                                                           rank_col,
+                                                                           first_key,
+                                                                           first_5p_tolerance,
+                                                                           other_5p_tolerance,
+                                                                           suffix
+                                                                           )
+                                           )
+        post_tol_ids = set(novel_le_ext.as_df()[id_col])
+
+        eprint(f"After 5'end match tolerance filter, number of events - {len(post_tol_ids)}")
+
+        if return_filtered_ids:
+            end_5p_filt_ids = post_tol_ids - post_len_ids
+
+    else:
+        eprint("No 5'end match tolerance filtering performed...")
+        if return_filtered_ids:
+            end_5p_filt_ids = set()
 
     # assign a 'event_type' column based on overlapping exon 'rank'
     novel_le_ext = novel_le_ext.assign(event_type_outcol,
@@ -415,12 +439,17 @@ def find_extension_events(novel_le,
 
     eprint(f"Number of events of each type- {ev_types}")
 
-    return novel_le_ext
+    if return_filtered_ids:
+        return novel_le_ext, post_len_ids, post_tol_ids
+
+    else:
+        return novel_le_ext
 
 
 def find_spliced_events(novel_li,
                         ref_introns,
-                        suffix="_b",
+                        tolerance_filter=True,
+                        suffix="_ref",
                         ref_cols_to_keep=["gene_id",
                                           "transcript_id",
                                           "exon_id",
@@ -434,6 +463,13 @@ def find_spliced_events(novel_li,
                         internal_key="internal_exon_spliced",
                         last_key="last_exon_spliced"):
     '''
+    Criteria:
+    1. Novel last intron (novel_li) overlaps with intron in ref_introns
+    2. If tolerance_filter=True, 5'ends of novel + overlapping ref must exactly match
+        - Otherwise all returned
+
+    tolerance_filter: bool
+        Whether to filter for events with an exact match at the 5'ss of overlapping reference intron
     '''
 
     # Find columns unique to ref_introns, so can drop at the end (no suffix added)
@@ -450,13 +486,16 @@ def find_spliced_events(novel_li,
     eprint(f"Number of putative novel spliced events - {_n_ids(novel_spliced, id_col)}")
     # eprint(f"ref exon ranks\n {novel_spliced.as_df()[rank_col].drop_duplicates()}")
 
-    # Subset for exact matches at 5'end
-    novel_spliced = novel_spliced.subset(lambda df: (df["Strand"] == "+") & (df["Start"] == df["Start_b"]) |
-                                                    (df["Strand"] == "-") & (df["End"] == df["End_b"])
+    if tolerance_filter:
+        # Subset for exact matches at 5'end
+        novel_spliced = novel_spliced.subset(lambda df: (df["Strand"] == "+") & (df["Start"] == df["Start" + suffix]) |
+                                                        (df["Strand"] == "-") & (df["End"] == df["End" + suffix])
                                          )
 
-    eprint(f"After filtering for exact reference 5'ss matches, number of novel spliced events - {_n_ids(novel_spliced, id_col)}")
-    # eprint(f"exact matching exon_ranks\n {novel_spliced.as_df()[rank_col].drop_duplicates()}")
+        eprint(f"After filtering for exact reference 5'ss matches, number of novel spliced events - {_n_ids(novel_spliced, id_col)}")
+        # eprint(f"exact matching exon_ranks\n {novel_spliced.as_df()[rank_col].drop_duplicates()}")
+    else:
+        eprint("No filtering for exact reference 5'ss matches was performed...")
 
     # Add event_type col based on overlapping exon 'rank'
     novel_spliced = novel_spliced.assign(event_type_outcol,
@@ -495,6 +534,8 @@ def main(input_gtf_path,
          min_extension_length,
          first_exon_5p_tolerance,
          other_exon_5p_tolerance,
+         extension_tolerance_filter,
+         spliced_tolerance_filter,
          trust_exon_number_ref,
          trust_exon_number_input,
          output_prefix):
@@ -511,7 +552,8 @@ def main(input_gtf_path,
 
     start = timer()
     # ref_gtf = pr.read_gtf(ref_gtf_path)
-    ref_gtf = read_gtf_restricted(ref_gtf_path, skiprows=None)
+    # ref_gtf = read_gtf_restricted(ref_gtf_path, skiprows=None)
+    ref_gtf = read_gtf_specific(ref_gtf_path)
     end = timer()
 
     eprint(f"Complete - took {end - start} s")
@@ -548,7 +590,7 @@ def main(input_gtf_path,
     eprint("Validating reference GTF as stranded (removing  non '+/-' rows if necessary)")
     ref_gtf = check_stranded(ref_gtf)
 
-    eprint(" ".join(["Extracting exons & introns from reference GTF,"
+    eprint(" ".join(["Extracting exons & introns from reference GTF,",
                      "numbering by 5'-3' order along the transcript &",
                      "classifying as 'first', 'internal or 'last' region..."]))
 
@@ -630,14 +672,30 @@ def main(input_gtf_path,
     eprint("Finding novel extension events...")
 
     start = timer()
-    extensions = find_extension_events(novel_le,
-                                       ref_exons,
-                                       min_extension_length,
-                                       first_exon_5p_tolerance,
-                                       other_exon_5p_tolerance)
+
+    if extension_tolerance_filter:
+        extensions, ext_fail_len_ids, ext_fail_5p_ids = find_extension_events(novel_le,
+                                                                              ref_exons,
+                                                                              min_extension_length,
+                                                                              first_exon_5p_tolerance,
+                                                                              other_exon_5p_tolerance,
+                                                                              extension_tolerance_filter)
+
+    else:
+        extensions = find_extension_events(novel_le,
+                                           ref_exons,
+                                           min_extension_length,
+                                           first_exon_5p_tolerance,
+                                           other_exon_5p_tolerance,
+                                           extension_tolerance_filter,
+                                           return_filtered_ids=False)
+
+
     end = timer()
 
     eprint(f"Complete - took {end - start} s")
+
+    extensions = extensions.drop("region_rank")
 
     # eprint(f"extensions cols \n{extensions.columns}")
 
@@ -652,15 +710,27 @@ def main(input_gtf_path,
                                    lambda df, df2:
                                    _filter_gr_for_not_tx(df, df2),
                                    as_pyranges=True)
+
+    # eprint(novel_li)
+
+    if extension_tolerance_filter:
+        # Also have IDs which are extensions but failed filter thresholds
+        # If don't exclude, will mis-annotate as splicing events if final intron/SJ matches reference event (somewhat likely)
+        ext_filt_fail_ids = ext_fail_len_ids.union(ext_fail_5p_ids)
+
+        novel_li = novel_li.subset(lambda df: ~df["transcript_id"].isin(ext_filt_fail_ids))
+
     end = timer()
 
     eprint(f"Complete - took {end - start} s")
 
-    # Valid events overlap reference intron/junction and exactly share a 5'ss
+    # eprint(novel_li)
+
+    # Valid events overlap reference intron/junction and exactly share a 5'ss (if spliced_tolerance_filter True)
     eprint("Finding novel spliced events...")
 
     start = timer()
-    spliced = find_spliced_events(novel_li, ref_introns)
+    spliced = find_spliced_events(novel_li, ref_introns, spliced_tolerance_filter)
     end = timer()
 
     eprint(f"Complete - took {end - start} s")
@@ -670,29 +740,40 @@ def main(input_gtf_path,
     spliced_le = novel_le.subset(lambda df: df["transcript_id"].isin(set(spliced.transcript_id)))
 
     # Want to retain metadata from matching reference regions
+    # These coordinates/metadata correspond to matching overlapping ref last intron/SJ
     spliced = spliced[["transcript_id",
-                       "gene_id_b",
-                       "transcript_id_b",
-                       "Start_b",
-                       "End_b",
+                       "gene_id_ref",
+                       "transcript_id_ref",
+                       "Start_ref",
+                       "End_ref",
                        "event_type"]]
 
     spliced_cols = spliced.columns.tolist()
 
+    # eprint(spliced_le.columns)
+
     spliced_le = spliced_le.apply_pair(spliced,
                                        lambda df, df2:_pd_merge_gr(df,
-                                                                   df2,
+                                                                   df2.drop(columns=["Chromosome",
+                                                                                     "Start",
+                                                                                     "End",
+                                                                                     "Strand"
+                                                                                     ]
+                                                                            ),
                                                                    how="left",
                                                                    on="transcript_id",
-                                                                   suffixes=[None, "_ref"],
+                                                                   suffixes=[None, "_spl"],
                                                                    to_merge_cols=spliced_cols),
                                        )
+    # eprint(spliced_le.columns)
 
-    spliced_le = spliced_le.drop(like="_ref$")
+    # Since drop default cols from spliced, should have no cols with suffix
+    # spliced_le = spliced_le.drop(like="_spl$")
+
+    # eprint(spliced_le.columns)
 
     combined = pr.concat([extensions, spliced_le])
 
-    # Output
     combined.to_gtf(output_prefix + ".last_exons.gtf")
 
 
@@ -737,13 +818,23 @@ if __name__ == '__main__':
                         "--other-exon-5p-tolerance",
                         type=int,
                         default=0,
-                        help="Tolerance window (nt) to match 5'ends of reference exons & overlapping putative last exon")
+                        help="Tolerance window (nt) to match 5'ends of reference exons & overlapping putative last exon for extension events")
 
     parser.add_argument("-o",
                         "--output-prefix",
                         type=str,
                         default="putative_novel",
                         help="Name of prefix for output files - GTF  (suffixed with '.last_exons.gtf'), 'match stats' ('.match_stats.tsv')")
+
+    parser.add_argument("--ignore-extension-tolerance",
+                        dest="extension_tolerance_filter",
+                        action="store_false",
+                        help="Whether to skip step to check whether 5'ends of ref overlapping exon & putative extension match within given tolerance. If option not provided then match tolerance filter is applied")
+
+    parser.add_argument("--ignore-spliced-tolerance",
+                        dest="spliced_tolerance_filter",
+                        action="store_false",
+                        help="Whether to skip step to check whether 5'ends of ref overlapping intron (SJ) & putative last intron of spliced event exactly match. If option not provided then match filter is applied")
 
     parser.add_argument("--trust-input-exon-number",
                         action="store_true",
@@ -766,6 +857,8 @@ if __name__ == '__main__':
          args.min_extension_length,
          args.first_exon_5p_tolerance,
          args.other_exon_5p_tolerance,
+         args.extension_tolerance_filter,
+         args.spliced_tolerance_filter,
          args.trust_ref_exon_number,
          args.trust_input_exon_number,
          args.output_prefix)
