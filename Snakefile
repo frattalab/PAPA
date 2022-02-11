@@ -6,10 +6,6 @@ configfile: "config/config.yaml"
 
 include: "rules/parse_config.py"
 
-
-assert config["expression_merge_by"] == "last_exon", f"'expression_merge_by' must be 'last_exon' ('polyA' is now deprecated) - {config['expression_merge_by']} was passed"
-
-
 sample_tbl = pd.read_csv(config["sample_tbl"], index_col="sample_name")
 
 SAMPLES = sample_tbl.index.tolist()

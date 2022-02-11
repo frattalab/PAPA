@@ -76,7 +76,7 @@ def add_common_gene_id_col(gr,
                            out_col="ref_gene_id",
                            gene_col="gene_id",
                            novel_id_str="PAPA",
-                           novel_ref_gene_col="gene_id_b",
+                           novel_ref_gene_col="gene_id_ref",
                            ):
 
     '''
@@ -96,7 +96,7 @@ def _df_grp_update_le_number(df,
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Series.cumsum.html?highlight=cumsum
     # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.core.groupby.DataFrameGroupBy.cumsum.html?highlight=cumsum
     - Basically be, cumulative sum of 'is_extension' (modified so same le_id = 1 extension only (1st))
-    - Should have same index, so add df.group_by(id_col).apply(lambda df: df[le_number].add(cumsum))
+    - Should have same index, so add df.groupby(id_col).apply(lambda df: df[le_number].add(cumsum))
     https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Series.add.html?highlight=add#pandas.Series.add
 
     Returns: pd.Series
@@ -195,14 +195,14 @@ def main(novel_le_path,
     eprint("Reading in input GTF of novel last exons...")
 
     # novel_le = pr.read_gtf(novel_le_path)
-    novel_le = read_gtf_specific(novel_le_path, ["gene_id", "transcript_id", "exon_number", "gene_id_b", "Start_b", "End_b", "event_type"])
+    novel_le = read_gtf_specific(novel_le_path, ["gene_id", "transcript_id", "exon_number", "gene_id_ref", "Start_ref", "End_ref", "event_type"])
 
     eprint("Combining ref & novel last exons objects and grouping last exons based on overlap...")
 
     # Identify last exon Ids containing novel extensions - these need to be handled separately
     # set of cluster IDs for each chr, strand tuple
     # {(chr, strand): {cluster_IDs}}
-    d_ext_gene_ids = novel_le.apply(lambda df: set(df[df["event_type"].str.contains("extension", regex=False)]["gene_id_b"]) # should be ref gene ID in novel events (foun)
+    d_ext_gene_ids = novel_le.apply(lambda df: set(df[df["event_type"].str.contains("extension", regex=False)]["gene_id_ref"]) # should be ref gene ID in novel events (foun)
                                                 ,
                                     as_pyranges=False)
 
@@ -225,14 +225,14 @@ def main(novel_le_path,
     # eprint("Reference genes without novel extensions")
     # eprint(ref_le_n_ext)
 
-    novel_le_ext = novel_le.subset(lambda df: df["gene_id_b"].isin(ext_gene_ids))
+    novel_le_ext = novel_le.subset(lambda df: df["gene_id_ref"].isin(ext_gene_ids))
 
     # eprint("Genes with novel last exon (extensions)")
     # eprint(novel_le_ext)
 
     # eprint(novel_le.columns)
 
-    novel_le_n_ext = novel_le.subset(lambda df: ~(df["gene_id_b"].isin(ext_gene_ids)))
+    novel_le_n_ext = novel_le.subset(lambda df: ~(df["gene_id_ref"].isin(ext_gene_ids)))
 
     # eprint("Genes with novel last exon (no extensions)")
     # eprint(novel_le_n_ext)
@@ -314,6 +314,7 @@ def main(novel_le_path,
     # eprint(combined_ext[["ref_gene_id", "le_id", "le_number", "event_type", "is_extension", "le_number_ext"]].print(n=50))
 
     # Reassign le_id with updated number, return to same shape as no extensions gr
+    eprint(combined_ext.columns)
     combined_ext = (combined_ext.drop(["le_id", "le_number", "is_extension"])
                     .apply(lambda df: df.rename(columns={"le_number_ext": "le_number"}))
                     .assign("le_id",

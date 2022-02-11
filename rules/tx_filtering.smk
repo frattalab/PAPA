@@ -183,6 +183,8 @@ rule get_novel_last_exons:
         other_ex_5p_tolerance = config["other_exon_5p_tolerance"],
         trust_input_exon_number = "",
         trust_ref_exon_number = "",
+        ignore_ext_tol = "" if config["extension_tolerance_filter"] else "--ignore-extension-tolerance",
+        ignore_spl_tol = "" if config["spliced_tolerance_filter"] else "--ignore-spliced-tolerance",
         out_prefix = os.path.join(TX_FILT_SUBDIR,
                                   "{condition}",
                                   "{sample}")
@@ -215,6 +217,8 @@ rule get_novel_last_exons:
         -t {params.other_ex_5p_tolerance} \
         {params.trust_input_exon_number} \
         {params.trust_ref_exon_number} \
+        {params.ignore_ext_tol} \
+        {params.ignore_spl_tol} \
         -o {params.out_prefix} &> {log}
         """
 
@@ -228,7 +232,7 @@ rule combine_novel_by_condition:
                                                      wildcards.condition,
                                                      "{sample}.last_exons.gtf"
                                                      ),
-                                        sample = get_condition_samples(wildcards.condition, OPTIONS))
+                                        sample=get_condition_samples(wildcards.condition, OPTIONS))
 
     output:
         os.path.join(TX_FILT_SUBDIR,
@@ -333,15 +337,36 @@ rule three_end_filter:
         """
 
 
+def filtered_novel_targets(conditions, three_end_filter):
+    '''
+    Returns target filtered novel last exon GTFs depending on whether applying 3'end filter or not
+    '''
+
+    assert isinstance(three_end_filter, bool)
+
+    if three_end_filter:
+        return expand(os.path.join(TX_FILT_SUBDIR,
+                                   "{condition}",
+                                   "{condition}.merged_last_exons.3p_end_filtered.gtf"
+                                   ),
+                      condition=conditions)
+
+    else:
+        # No 3'end filtering
+        return expand(os.path.join(TX_FILT_SUBDIR,
+                                   "{condition}",
+                                   "{condition}.merged_last_exons.gtf"
+                                   ),
+                      condition=conditions
+                      )
+
+
 rule combine_novel_filtered_by_condition:
     '''
     Combine 3'end filtered last exons across conditions into a single GTF file
     '''
     input:
-        expand(os.path.join(TX_FILT_SUBDIR,
-                            "{condition}",
-                            "{condition}.merged_last_exons.3p_end_filtered.gtf"),
-                            condition=CONDITIONS)
+        filtered_novel_targets(CONDITIONS, config["three_end_filter"])
 
     output:
         gtf = os.path.join(TX_FILT_SUBDIR,

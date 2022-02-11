@@ -4,7 +4,7 @@
 
 # Path to main (top-level) output directory storing results for this run
 #MUST END WITH SLASH
-main_output_dir: 2022-01-25_test_subsample/
+main_output_dir: 2022-02-11_test_subsample/
 
 # PATH to CSV sample table linking samples to corresponding BAM, FASTQ files etc.
 # 1 row per sample, 4 columns ('<column name>': <description>):
@@ -88,38 +88,34 @@ exclude_tags: ["mRNA_end_NF"]
 min_mean_tpm: 1
 
 ###
-# Splice junction matching/filtering
+# Filtering putative novel last exons
 ###
+
+# Whether to apply filtering at 5'end for matches with reference for extension events
+extension_tolerance_filter: True
 
 # Tolerance window (nt) to match 5'ends of reference first exons & first exon extension events
 # Predicted 5'ends can be inprecise relative to annotation, this gives some leeway in matching these events
 first_exon_5p_tolerance: 100
 
-# Tolerance window (nt) to match 5'ends of reference exons & overlapping putative last exon
+# Tolerance window (nt) to match 5'ends of reference exons & overlapping putative last exon (extension events)
 other_exon_5p_tolerance: 0
 
+# Whether to apply filtering at 5'end for exact matches between 5'ss of novel last SJ (intron) & reference SJ (intron)
+spliced_tolerance_filter: True
 
-# when filtering assembled transcripts, valid should have intron chain match up until penultimate intron(s)
-# 'transcript' - NOT YET IMPLEMENTED - introns/splice junctions come from the same transcript
-# 'any' - matching introns/splice junctions can come from any transcript
-intron_chain_filter_mode: "any"
-
-# Max number of consective 3'end non-matched introns for a transcript to be considered valid
-# Default: 2 (equivalent to allowing the penultimate exon of transcript to also be novel)
-max_terminal_non_match: 2
 
 # Minimum length of 3'end extension for novel 3'UTR extension events to be retained
-# Applied to 'internal_exon_bleedthrough' & 'ds_3utr_extension' events
 # Default: 100
 min_extension_length: 100
 
-# Number of threads/cpus for scripts/filter_tx_by_intron_chain.py
-# Default: 1
-intron_chain_filter_threads: 1
 
 ###
 # 3'end transcript filtering
 ###
+
+# Whether to apply filtering of candidate novel last exons at their 3'ends for polyA signal motifs or reference polyA sites
+three_end_filter: True
 
 # Maximum distance between predicted 3'end and nearest polya_site_atlas site for a transcript to be retained
 max_atlas_distance: 100
@@ -130,30 +126,13 @@ motif_search_region_length: 100
 # Expected distance upstream from 3'end for polyA signal motifs (typically enriched ~20nt upstream
 # from cleavage site). If a last exon has multiple found motifs, the 3'end with a motif closest to
 # this value will be selected as the representative 3'end.
-motif_expected_distance: 20
+motif_expected_distance: 21
 
 # Which poly(A) signal motifs to use to retain 3'ends with evidence of genuine cleavage event
 # 'Gruber' - 18 conserved motifs (mouse and human) identified by Gruber et al., 2016
 # 'Beaudoing' - 12 conserved motifs identified by Beaudoing 2000 (all of which also identified by Gruber 2016)
 # Path to TXT file of custom (DNA) PAS motifs, one per-line
 polya_signal_motifs: "Gruber"
-
-
-###
-# Summarising polyA site expression
-###
-
-# How to summarise transcript abundance to polyA site isoforms for each gene
-# 'polyA' - sum expression of transcripts if they share a poly(A) site
-# 'last_exon' - sum expression if they share a last exon (any overlap). 3'UTR extension events will be considered as separate last exons
-expression_merge_by: "last_exon"
-
-# Target window size (nt) for merging closely spaced polyA sites to a single polyA cluster
-# Window is centred on 3'end of each transcripts -
-# PyRanges considers polyA sites as 1nt length intervals
-# pas_merge_window_size - 1 is extended EITHER direction of each polyA site
-pas_merge_window_size: 25
-
 
 
 #####-----------------------------------------
