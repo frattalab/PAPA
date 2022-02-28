@@ -520,3 +520,57 @@ def check_concat(gr):
         out_gr = gr.apply(lambda df: df.reindex(columns=all_cols))
 
         return out_gr
+
+
+def _df_collapse_metadata(df, id_col, standard_cols, collapse_cols, collapse_sep):
+    '''
+    Intended to be applied to internal dfs of PyRanges objects
+    '''
+
+    grouped = df.groupby(id_col)
+
+    # Pick first entry for all standard_cols, these should be same for all rows of id_col
+    # Leaves a df with id_col values as index
+    std_collapsed = grouped[standard_cols].first()
+
+    # For collapse cols, collapse to single row of delimited strings for each column
+    # Again leave a df with id_col values as index labels
+    clp_collapsed = grouped[collapse_cols].agg(lambda col: collapse_sep.join(col.astype(str)))
+
+    # combine by id_col
+    collapsed = std_collapsed.merge(clp_collapsed, left_index=True, right_index=True)
+
+    return collapsed
+
+
+def collapse_metadata(gr,
+                      id_col="transcript_id",
+                      standard_cols=["Chromosome", "Start", "End", "Strand"],
+                      collapse_cols=None,
+                      collapse_sep=","):
+    '''
+    Collapse to a single entry/row per ID entry whilst retaining/collapsing metadata on duplicate rows
+    standard_cols: list of column labels that have the same value for all entries of id_col and do not need to be collapsed.
+    This is essential for PyRanges standard columns, as you do not want to be changing their dtypes to string. All columns labels in this list retain their dtype, and the first value is retained
+
+    collapse_cols: list of column labels containing metadata you'd like to collapse to a single row.
+    If None, then all columns in gr except for standard_cols & id_col will be collapsed
+    '''
+
+    assert all([True if col in gr.columns else False for col in standard_cols])
+
+    if collapse_cols is None:
+        def_cols = standard_cols + [id_col]
+        collapse_cols = [col for col in gr.columns if col not in def_cols]
+
+    else:
+        assert all([True if col in gr.columns else False for col in collapse_cols])
+
+
+    return gr.apply(lambda df: _df_collapse_metadata(df,
+                                                     id_col,
+                                                     standard_cols,
+                                                     collapse_cols,
+                                                     collapse_sep
+                                                     )
+                    )

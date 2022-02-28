@@ -4,7 +4,7 @@ from __future__ import print_function
 import pyranges as pr
 import numpy as np
 import pandas as pd
-from papa_helpers import eprint, add_region_number, get_terminal_regions, _pd_merge_gr, _n_ids, check_stranded, read_gtf_specific
+from papa_helpers import eprint, add_region_number, get_terminal_regions, _pd_merge_gr, _n_ids, check_stranded, read_gtf_specific, collapse_metadata
 from pyranges.readers import read_gtf_restricted
 from timeit import default_timer as timer
 import argparse
@@ -626,6 +626,8 @@ def main(input_gtf_path,
 
     # eprint(novel_gtf.as_df().info(memory_usage="deep"))
 
+    novel_cols = novel_gtf.columns.tolist()
+
     eprint(" ".join(["Extracting last exons & last introns",
                      "from input GTF & numbering by",
                      "5'-3' order along the transcript"]))
@@ -773,6 +775,16 @@ def main(input_gtf_path,
     # eprint(spliced_le.columns)
 
     combined = pr.concat([extensions, spliced_le])
+
+    # Finally, collapse metadata/duplicate attribute values for each last exon (transcript ID)
+    # This can occur if same last exon matches to multiple reference transcripts/junctions
+    eprint("Collapsing metadata columns for each last exon (e.g. multiple reference transcript matches)...")
+
+    cols_to_collapse = [col for col in combined.columns if col not in novel_cols]
+
+    combined = collapse_metadata(combined,
+                                 standard_cols=novel_cols,
+                                 collapse_cols=cols_to_collapse)
 
     combined.to_gtf(output_prefix + ".last_exons.gtf")
 
