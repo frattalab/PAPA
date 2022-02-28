@@ -786,6 +786,14 @@ def main(input_gtf_path,
                                  standard_cols=novel_cols,
                                  collapse_cols=cols_to_collapse)
 
+
+    # make sure no NaNs in any columns - will break downstream GTF attribute parsing
+    eprint(combined.as_df()['3p_extension_length'].astype(float).value_counts(bins=4, dropna=False))
+    eprint(combined.as_df()['3p_extension_length'].dtype)
+
+
+    combined = combined.apply(lambda df: df.fillna('NA'))
+
     combined.to_gtf(output_prefix + ".last_exons.gtf")
 
 
