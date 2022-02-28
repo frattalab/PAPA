@@ -527,6 +527,14 @@ def _df_collapse_metadata(df, id_col, standard_cols, collapse_cols, collapse_sep
     Intended to be applied to internal dfs of PyRanges objects
     '''
 
+    found_collapsed = [col for col in collapse_cols if col in df.columns]
+
+    not_found_collapsed = set(collapse_cols) - set(found_collapsed)
+
+    if len(not_found_collapsed) > 0:
+        chr_strand = f"{df.Chromosome.drop_duplicates()[0]},{df.Strand.drop_duplicates()[0]}"
+        eprint(f"following 'collapse_cols' columns not found in df (chr/strand) - {chr_strand} - {', '.join(not_found_collapsed)}")
+
     grouped = df.groupby(id_col)
 
     # Pick first entry for all standard_cols, these should be same for all rows of id_col
@@ -535,7 +543,7 @@ def _df_collapse_metadata(df, id_col, standard_cols, collapse_cols, collapse_sep
 
     # For collapse cols, collapse to single row of delimited strings for each column
     # Again leave a df with id_col values as index labels
-    clp_collapsed = grouped[collapse_cols].agg(lambda col: collapse_sep.join(col.astype(str)))
+    clp_collapsed = grouped[found_collapsed].agg(lambda col: collapse_sep.join(col.astype(str)))
 
     # combine by id_col
     collapsed = std_collapsed.merge(clp_collapsed, left_index=True, right_index=True)
