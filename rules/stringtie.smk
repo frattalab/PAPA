@@ -15,7 +15,7 @@ rule stringtie:
                      "{sample}.assembled.gtf")
 
     params:
-        point_feats = "--ptf " + config["polya_site_point_features"] if config["use_point_features"] else "",
+        point_feats = "--ptf " + config["point_features_path"] if config["use_point_features"] else "",
         strandedness = config["strandedness"],
         label = config["label"] + "." + "{sample}",
         min_iso_frac = config["min_isoform_fraction_abundance"],
