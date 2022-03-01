@@ -778,24 +778,39 @@ def main(input_gtf_path,
 
     # Finally, collapse metadata/duplicate attribute values for each last exon (transcript ID)
     # This can occur if same last exon matches to multiple reference transcripts/junctions
+
     eprint("Collapsing metadata columns for each last exon (e.g. multiple reference transcript matches)...")
+    start = timer()
 
     cols_to_collapse = [col for col in combined.columns if col not in novel_cols]
+
+    # Replacing 'nan' columns in cols_to_collapse -
+    # If don't replace, PyRanges will output a attribute key: value as <key> ""
+    # The empty "" leads to parsing error in subsequent pr.read_gtf calls
+    # https://github.com/biocore-ntnu/pyranges/issues/254
+
+    # TODO: work out why the hell I have to convert to df to recognise & replace nan values in a PyRanges object
+    ## (even via a pr.apply - they appear to be 'nan' strings (?!) unless convert to df
+
+    # dict of {<collapse_col>: np.nan} - nan values in these cols only are replaced (to prevent "")
+    # Doing it this way means cols with all nan values will be dropped in final GTF
+    replace_dict = {col: np.nan for col in cols_to_collapse}
+
+    combined = (pr.PyRanges(combined.as_df()
+                                    .replace(replace_dict, "NULL")
+                            )
+                )
 
     combined = collapse_metadata(combined,
                                  standard_cols=novel_cols,
                                  collapse_cols=cols_to_collapse)
 
+    end = timer()
 
-    # make sure no NaNs in any columns - will break downstream GTF attribute parsing
-    eprint(combined.as_df()['3p_extension_length'].astype(float).value_counts(bins=4, dropna=False))
-    eprint(combined.as_df()['3p_extension_length'].dtype)
+    eprint(f"Complete - took {end - start} s")
 
-
-    combined = combined.apply(lambda df: df.fillna('NA'))
-
+    eprint(f"Writing novel last exons to GTF - {output_prefix + '.last_exons.gtf'}")
     combined.to_gtf(output_prefix + ".last_exons.gtf")
-
 
 
 if __name__ == '__main__':
