@@ -6,7 +6,7 @@ import numpy as np
 import pyfaidx
 from Bio.Seq import Seq
 from Bio import motifs
-from papa_helpers import eprint, _n_ids, _pd_merge_gr
+from papa_helpers import eprint, _n_ids, _pd_merge_gr, check_concat
 import argparse
 import os
 import sys
@@ -604,6 +604,9 @@ def main(gtf_path,
     # Might keep the 'transcript' features in input GTF...
 
     le = gtf.subset(lambda df: df["Feature"] == "exon")
+
+    # Make sure that all dfs have same number of columns (so insert doesn't get index error)
+    le = check_concat(le)
 
     #3. Find distance from predicted 3'end to nearest atlas site
     # Reporting 2 columns - 1 with distance (nt), 1 specifying whether at/below max_distance (1/0)
