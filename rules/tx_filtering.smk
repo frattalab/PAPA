@@ -261,8 +261,8 @@ rule combine_novel_by_condition:
                      "{condition}",
                      "{condition}_combine_novel_by_condition.log")
 
-    group:
-        "transcript_filtering_3p"
+    # group:
+    #     "transcript_filtering_3p"
 
     shell:
         """
@@ -319,8 +319,8 @@ rule three_end_filter:
                      "{condition}",
                      "{condition}_three_end_filter.log")
 
-    group:
-        "transcript_filtering_3p"
+    # group:
+    #     "transcript_filtering_3p"
 
     shell:
         """
@@ -391,8 +391,8 @@ rule combine_novel_filtered_by_condition:
                      config["tx_filtering_subdir_name"],
                      "combine_novel_filtered_by_condition.log")
 
-    group:
-        "transcript_filtering_3p"
+    # group:
+    #     "transcript_filtering_3p"
 
     shell:
         """
