@@ -782,7 +782,10 @@ def main(input_gtf_path,
     eprint("Collapsing metadata columns for each last exon (e.g. multiple reference transcript matches)...")
     start = timer()
 
-    cols_to_collapse = [col for col in combined.columns if col not in novel_cols]
+    # Cols added in script that always have 1 value per last exon (& always assigned a non-NaN value)
+    assigned_cols = ["event_type"]
+
+    cols_to_collapse = [col for col in combined.columns if col not in novel_cols and col not in assigned_cols]
 
     # Replacing 'nan' columns in cols_to_collapse -
     # If don't replace, PyRanges will output a attribute key: value as <key> ""
@@ -803,7 +806,8 @@ def main(input_gtf_path,
 
     combined = collapse_metadata(combined,
                                  standard_cols=novel_cols,
-                                 collapse_cols=cols_to_collapse)
+                                 collapse_cols=cols_to_collapse,
+                                 collapse_uniq_cols=assigned_cols)
 
     end = timer()
 

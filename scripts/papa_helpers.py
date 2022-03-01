@@ -522,7 +522,7 @@ def check_concat(gr):
         return out_gr
 
 
-def _df_collapse_metadata(df, id_col, standard_cols, collapse_cols, collapse_sep):
+def _df_collapse_metadata(df, id_col, standard_cols, collapse_cols, collapse_uniq_cols, collapse_sep):
     '''
     Intended to be applied to internal dfs of PyRanges objects
     '''
@@ -545,8 +545,18 @@ def _df_collapse_metadata(df, id_col, standard_cols, collapse_cols, collapse_sep
     # Again leave a df with id_col values as index labels
     clp_collapsed = grouped[found_collapsed].agg(lambda col: collapse_sep.join(col.astype(str)))
 
-    # combine by id_col
-    collapsed = std_collapsed.merge(clp_collapsed, left_index=True, right_index=True)
+    if collapse_uniq_cols is not None:
+        # Collapse these cols to single row of delimited strings whilst dropping duplicates
+        # Again leave a df with id_col values as index labels
+        clp_uniq_collapsed = grouped[collapse_uniq_cols].agg(lambda col: collapse_sep.join(list(dict.fromkeys(col.astype(str)))))
+
+        int_collapsed = clp_collapsed.merge(clp_uniq_collapsed, left_index=True, right_index=True)
+
+        collapsed = std_collapsed.merge(int_collapsed, left_index=True, right_index=True)
+
+    else:
+        # combine by id_col
+        collapsed = std_collapsed.merge(clp_collapsed, left_index=True, right_index=True)
 
     return collapsed
 
@@ -555,20 +565,31 @@ def collapse_metadata(gr,
                       id_col="transcript_id",
                       standard_cols=["Chromosome", "Start", "End", "Strand"],
                       collapse_cols=None,
+                      collapse_uniq_cols=None,
                       collapse_sep=","):
     '''
     Collapse to a single entry/row per ID entry whilst retaining/collapsing metadata on duplicate rows
     standard_cols: list of column labels that have the same value for all entries of id_col and do not need to be collapsed.
     This is essential for PyRanges standard columns, as you do not want to be changing their dtypes to string. All columns labels in this list retain their dtype, and the first value is retained
 
-    collapse_cols: list of column labels containing metadata you'd like to collapse to a single row.
-    If None, then all columns in gr except for standard_cols & id_col will be collapsed
+    collapse_cols: list of column labels containing metadata you'd like to collapse to a single row (separated by collapse_sep)
+        If None, then all columns in gr except for standard_cols, id_col & collapse_uniq_cols will be collapsed
+    collapse_uniq_cols: list of column labels containing metadata you'd like to collapse to a single row whilst dropping duplicate values. Values will maintain order of appearance in df
     '''
 
     assert all([True if col in gr.columns else False for col in standard_cols])
 
+    if collapse_uniq_cols is not None:
+        # Here just checking the columns are found in df
+        assert all([True if col in gr.columns else False for col in collapse_uniq_cols])
+
     if collapse_cols is None:
-        def_cols = standard_cols + [id_col]
+        if collapse_uniq_cols is not None:
+            def_cols = standard_cols + [id_col] + collapse_uniq_cols
+
+        else:
+            def_cols = standard_cols + [id_col]
+
         collapse_cols = [col for col in gr.columns if col not in def_cols]
 
     else:
@@ -579,6 +600,7 @@ def collapse_metadata(gr,
                                                      id_col,
                                                      standard_cols,
                                                      collapse_cols,
+                                                     collapse_uniq_cols,
                                                      collapse_sep
                                                      )
                     )
