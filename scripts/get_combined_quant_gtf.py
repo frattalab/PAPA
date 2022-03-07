@@ -403,7 +403,7 @@ def main(novel_le_path,
 
     eprint(f"Writing 'tx2gene' (transcript_id | gene_id) to TSV... - {output_prefix + '.tx2gene.tsv'}")
 
-    (quant_combined.subset(lambda df: df.duplicated(subset=["gene_id"], keep=False)) # remove single isoform genes (keep='False' marks all duplicates as True (so keep these))
+    (quant_combined.subset(lambda df: df.duplicated(subset=["ref_gene_id"], keep=False)) # remove single isoform genes (keep='False' marks all duplicates as True (so keep these))
      .as_df()
                    [["transcript_id", "ref_gene_id"]]
                    .drop_duplicates()
@@ -417,7 +417,7 @@ def main(novel_le_path,
 
     eprint(f"Writing 'tx2le' (transcript_id | le_id) to TSV... - {output_prefix + '.tx2le.tsv'}")
 
-    (quant_combined.subset(lambda df: df.duplicated(subset=["gene_id"], keep=False))
+    (quant_combined.subset(lambda df: df.duplicated(subset=["ref_gene_id"], keep=False))
      .as_df()
      [["transcript_id", "le_id"]]
      .drop_duplicates()
@@ -429,7 +429,7 @@ def main(novel_le_path,
      )
 
     eprint(f"Writing 'le2gene' (le_id | gene_id) to TSV... - {output_prefix + '.le2gene.tsv'}")
-    (quant_combined.subset(lambda df: df.duplicated(subset=["gene_id"], keep=False))
+    (quant_combined.subset(lambda df: df.duplicated(subset=["ref_gene_id"], keep=False))
      .as_df()
      [["le_id", "ref_gene_id"]]
      .drop_duplicates()
@@ -442,7 +442,7 @@ def main(novel_le_path,
      )
 
     eprint(f"writing 'info' table (tx_id | le_id | gene_id | gene_name | event_type | coords | annot_status) to file - {output_prefix + '.info.tsv'}")
-    (quant_combined.subset(lambda df: df.duplicated(subset=["gene_id"], keep=False))
+    (quant_combined.subset(lambda df: df.duplicated(subset=["ref_gene_id"], keep=False))
      .as_df()
      [["transcript_id", "le_id", "ref_gene_id", "gene_name", "event_type", "Chromosome", "Start", "End", "Strand"]]
      .rename(columns={"ref_gene_id": "gene_id"})
