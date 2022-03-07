@@ -339,41 +339,47 @@ def main(novel_le_path,
                                )
 
     # These events need to be handled separately - will create a 'metagene' combining
-    eprint(f"Number of novel events matching multiple reference genes - {novel_le.as_df()['gene_id_ref'].str.contains(',', regex=False).sum()}")
+    n_mult = novel_le.as_df()['gene_id_ref'].str.contains(',', regex=False).sum()
+    eprint(f"Number of novel events matching multiple reference genes - {n_mult}")
 
-    # Split novel_le into novel_le_single (overlaps 1 ref gene ID) & novel_le_mult (overlaps > 1 ref gene ID)
-    # These will be annotated separately then combined in the final step
-    novel_le_single = novel_le.subset(lambda df: ~df['gene_id_ref'].str.contains(',', regex=False))
-    novel_le_mult = novel_le.subset(lambda df: df['gene_id_ref'].str.contains(',', regex=False))
+    if n_mult == 0:
+        combined_mult = pr.PyRanges()
+        combined_single = annotate_le_ids(novel_le, ref_le, le_id_outcol="le_id")
 
-    # Need a set of ref gene_ids from novel_le_mult to subset reference GTF
-    # Present in novel_le_mult like <gene_id>,<gene_id_b> - need to split by 'comma' and expand into sinlge list
-    mult_ref_ids = set(novel_le_mult.as_df()['gene_id_ref'].str.split(',').explode())
+    else:
+        # Split novel_le into novel_le_single (overlaps 1 ref gene ID) & novel_le_mult (overlaps > 1 ref gene ID)
+        # These will be annotated separately then combined in the final step
+        novel_le_single = novel_le.subset(lambda df: ~df['gene_id_ref'].str.contains(',', regex=False))
+        novel_le_mult = novel_le.subset(lambda df: df['gene_id_ref'].str.contains(',', regex=False))
 
-    # Split ref le into _single & _mult
-    ref_le_single = ref_le.subset(lambda df: ~df['gene_id'].isin(mult_ref_ids))
-    ref_le_mult = ref_le.subset(lambda df: df['gene_id'].isin(mult_ref_ids))
+        # Need a set of ref gene_ids from novel_le_mult to subset reference GTF
+        # Present in novel_le_mult like <gene_id>,<gene_id_b> - need to split by 'comma' and expand into sinlge list
+        mult_ref_ids = set(novel_le_mult.as_df()['gene_id_ref'].str.split(',').explode())
 
-    # Need to update the reference gene_id for _mult events
-    # in novel - <gene_id_a>,<gene_id_b>
-    # in ref - <gene_id_a>
-    # create dict of {<ref_id_1>: <ref_id_1>,<ref_id_2>, <ref_id_2>: <ref_id_1>,<ref_id_2>}
-    mult_ids_dict = {}
-    for mult_id in novel_le_mult.as_df()['gene_id_ref']:
-        splt = mult_id.split(",")
-        for id in splt:
-            mult_ids_dict[id] = mult_id
+        # Split ref le into _single & _mult
+        ref_le_single = ref_le.subset(lambda df: ~df['gene_id'].isin(mult_ref_ids))
+        ref_le_mult = ref_le.subset(lambda df: df['gene_id'].isin(mult_ref_ids))
 
-    ref_le_mult = ref_le_mult.assign("gene_id",
-                                     lambda df: df["gene_id"].apply(lambda x: mult_ids_dict[x]))
+        # Need to update the reference gene_id for _mult events
+        # in novel - <gene_id_a>,<gene_id_b>
+        # in ref - <gene_id_a>
+        # create dict of {<ref_id_1>: <ref_id_1>,<ref_id_2>, <ref_id_2>: <ref_id_1>,<ref_id_2>}
+        mult_ids_dict = {}
+        for mult_id in novel_le_mult.as_df()['gene_id_ref']:
+            splt = mult_id.split(",")
+            for id in splt:
+                mult_ids_dict[id] = mult_id
 
-    # eprint(ref_le_mult[["gene_id"]])
+        ref_le_mult = ref_le_mult.assign("gene_id",
+                                         lambda df: df["gene_id"].apply(lambda x: mult_ids_dict[x]))
 
-    # Combine across ref & novel, annotate le_ids
-    # Note that novel extension events are annotated separately, as these will overlap with their reference counterpart (so need to update assigned le_number)
-    eprint("Combining ref & novel last exons objects and grouping last exons based on overlap...")
-    combined_single = annotate_le_ids(novel_le_single, ref_le_single, le_id_outcol="le_id")
-    combined_mult = annotate_le_ids(novel_le_mult, ref_le_mult, le_id_outcol="le_id")
+        # eprint(ref_le_mult[["gene_id"]])
+
+        # Combine across ref & novel, annotate le_ids
+        # Note that novel extension events are annotated separately, as these will overlap with their reference counterpart (so need to update assigned le_number)
+        eprint("Combining ref & novel last exons objects and grouping last exons based on overlap...")
+        combined_single = annotate_le_ids(novel_le_single, ref_le_single, le_id_outcol="le_id")
+        combined_mult = annotate_le_ids(novel_le_mult, ref_le_mult, le_id_outcol="le_id")
 
     # GTF containing defined last exons (with le_id etc. defined)
     combined = pr.concat([combined_single, combined_mult])
