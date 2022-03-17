@@ -15,9 +15,9 @@ option_list <- list(make_option(c("-s", "--sample-table"),
                     make_option(c("-t","--tx2le"),
                                 type="character",
                                 help = "Path to <prefix>'.tx2le.tsv file storing transcript ID to last exon ID assignment (output by get_combined_quant_gtf.py)"),
-                    make_option(c("-g","--tx2gene"),
+                    make_option(c("-g","--le2gene"),
                                 type="character",
-                                help = "Path to <prefix>'.tx2le.tsv file storing transcript ID to Gene ID assignment (output by get_combined_quant_gtf.py)"),
+                                help = "Path to <prefix>.le2gene.tsv file storing last exon ID to Gene ID assignment (output by get_combined_quant_gtf.py)"),
                     make_option(c("-o", "--output-prefix"),
                                 dest = "output_prefix",
                                 default = "summarised_pas_quantification",
@@ -44,7 +44,7 @@ sample_tbl <- read.table(opt$sample_table,
 n_cond <- length(unique(sample_tbl$condition))
 
 if ( n_cond != 2) {
-  
+
   stop(paste("Sample table must only contain 2 distinct conditions -",
              n_cond,
              "were found"))
@@ -75,7 +75,7 @@ tx2pas <- read.table(opt$tx2le,
                      sep = "\t",
                      stringsAsFactors = FALSE)
 
-tx2gene <- read.table(opt$tx2gene,
+tx2gene <- read.table(opt$le2gene,
                       header = T,
                       sep = "\t",
                       stringsAsFactors = FALSE)
@@ -160,7 +160,7 @@ write.table(pas_tpm,
 
 # Generate PPAU matrices
 # Rows = last exon ID,
-# columns = PPAU values for each sample (sample_name as col names), 
+# columns = PPAU values for each sample (sample_name as col names),
 # mean_{condition} for every provided condition &
 # delta_PPAU_{condition}_{base} for every provided contrast
 # Note: EVERY PROVIDED CONSTRAST IS CURRENTLY JUST A SINGLE ONE.
