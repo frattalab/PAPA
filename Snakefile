@@ -8,6 +8,13 @@ include: "rules/parse_config.py"
 
 sample_tbl = pd.read_csv(config["sample_tbl"], index_col="sample_name")
 
+# Check fastq2, if all empty then dataset is single end
+if sample_tbl['fastq2'].isna().all():
+    single_end = True
+else:
+    single_end = False
+
+
 SAMPLES = sample_tbl.index.tolist()
 CONDITIONS = sample_tbl["condition"].drop_duplicates().tolist()
 OPTIONS = sample_tbl.to_dict(orient="index")

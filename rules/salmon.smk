@@ -4,6 +4,12 @@
 #     min_jnc = "min_jnc_\\d$",
 #     min_cov = "min_cov_\\d$"
 
+if single_end:
+    ruleorder: salmon_quant_se > salmon_quant_pe
+
+else:
+    ruleorder: salmon_quant_pe > salmon_quant_se
+
 
 rule custom_txome_fasta:
     '''
@@ -158,3 +164,48 @@ rule salmon_quant_pe:
         --gcBias \
         &> {log}
         """
+
+
+rule salmon_quant_se:
+    input:
+        fast1 = lambda wildcards: OPTIONS[wildcards.sample]["fastq1"],
+        index = rules.salmon_index.output.seq
+
+    output:
+        os.path.join(SALMON_SUBDIR, "quant", "{sample}", "quant.sf")
+
+    params:
+        index_dir = os.path.join(SALMON_SUBDIR, "index",),
+        output_dir = os.path.join(SALMON_SUBDIR, "quant", "{sample}"),
+        libtype = "A"
+
+    threads:
+        config["salmon_quant_threads"]
+
+    conda:
+        "../envs/papa.yaml"
+
+    log:
+        os.path.join(LOG_SUBDIR,
+                     config["salmon_subdir_name"],
+                     "salmon_quant_pe.{sample}.log")
+
+    benchmark:
+        os.path.join(BMARK_SUBDIR,
+                     config["salmon_subdir_name"],
+                     "salmon_quant_pe.{sample}.txt")
+
+    shell:
+        """
+        salmon quant \
+        --index {params.index_dir} \
+        --libType {params.libtype} \
+        -r {input.fast1} \
+        --threads {threads} \
+        -o {params.output_dir} \
+        --seqBias \
+        --posBias \
+        --gcBias \
+        &> {log}
+        """
+

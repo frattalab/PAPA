@@ -23,26 +23,38 @@ get_novel_last_exons:
   submission_string: " "
 
 transcript_filtering_tpm:
-  h_vmem: 8G
-  tmem: 8G
+  h_vmem: 12G
+  tmem: 12G
   h_rt:  8:00:00
   submission_string: " "
 
 transcript_filtering_3p:
-  h_vmem: 14G
-  tmem: 14G
+  h_vmem: 12G
+  tmem: 12G
   h_rt:  8:00:00
   submission_string: " "
 
 three_end_filter:
-  h_vmem: 6G
-  tmem: 6G
+  h_vmem: 8G
+  tmem: 8G
   h_rt:  4:00:00
   submission_string: " "
 
 merge_by_condition:
   h_vmem: 6G
   tmem: 6G
+  h_rt:  4:00:00
+  submission_string: " "
+
+combine_novel_by_condition:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  4:00:00
+  submission_string: " "
+
+combine_novel_filtered_by_condition:
+  h_vmem: 8G
+  tmem: 8G
   h_rt:  4:00:00
   submission_string: " "
 
@@ -75,3 +87,16 @@ salmon_quant_pe:
   tmem: 14G
   submission_string: "-pe smp 2 -R y"
   h_rt: 12:00:00
+
+salmon_quant_se:
+  h_vmem: 12G
+  tmem: 12G
+  submission_string: "-pe smp 2 -R y"
+  h_rt: 12:00:00
+
+tx_to_le_quant:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  4:00:00
+  submission_string: " "
+

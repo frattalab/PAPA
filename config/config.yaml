@@ -4,7 +4,7 @@
 
 # Path to main (top-level) output directory storing results for this run
 #MUST END WITH SLASH
-main_output_dir: 2022-02-11_test_subsample/
+main_output_dir: 2022-03-14_appocher_2017_skndz/
 
 # PATH to CSV sample table linking samples to corresponding BAM, FASTQ files etc.
 # 1 row per sample, 4 columns ('<column name>': <description>):
@@ -13,7 +13,7 @@ main_output_dir: 2022-02-11_test_subsample/
 # 'path': path to BAM file containing aligned reads for given sample. BAM files should be coordinate sorted and have a corresponding BAI index file at the same location (suffixed with ‘.bai’)
 # 'fastq1`': path to FASTQ file storing 1st mates of read pairs aligned for same sample
 # 'fastq2': path to FASTQ file storing 2nd mates of read pairs aligned for same sample
-sample_tbl: config/subsample_ward_i3_sample_tbl.csv
+sample_tbl: config/papa_appocher_skndz.csv
 
 # What is strandedness of library prep used in samples?
 # "--rf" - library is stranded with read 2 corresponding to transcribed strand ('fr-firststrand'/ 'reverse')
@@ -28,7 +28,7 @@ strandedness: "--rf"
 # - Guide StringTie transcript assembly
 # - Match assembled transcripts to known splice junctions
 # - Quantify reference transcripts with Salmon
-annotation_gtf: data/annotation/gencode.chr8.v34.annotation.gtf
+annotation_gtf: 2022-01-28_ward_i3_old_v0.2_min_tpm_1/reference_filtered.gtf
 
 # Source of GTF file of reference transcripts ('annotation_gtf')
 # One of 'gencode' if GENCODE or "ensembl" for ENSEMBL other string
@@ -38,11 +38,11 @@ annotation_source: "gencode"
 # Path to FASTA file containing genome sequence
 # An index file should also exist in same directory (suffixed with .fai)
 # Can be generated using samtools faidx
-genome_fasta: data/annotation/chr8_GRCh38.primary_assembly.genome.fa
+genome_fasta: /SAN/vyplab/vyplab_reference_genomes/sequence/human/gencode/GRCh38.primary_assembly.genome.fa
 
 # Path to BED file containing reference poly(A) site database
 # e.g. PolyASite atlas from 3'-end sequencing
-polya_site_atlas: data/annotation/atlas.clusters.2.0.GRCh38.96.chr8.chr_prefix.bed
+polya_site_atlas: /SAN/vyplab/vyplab_reference_genomes/PolyASite/atlas.clusters.2.0.GRCh38.96.chr_prefix.bed
 
 #####-----------------------------------------
 ### GENERAL PIPELINE PARAMETERS
@@ -57,7 +57,7 @@ pre_stringtie_processing: "none"
 ###
 
 # True / False to switch on/off reference filtering
-filter_ref_gtf: True
+filter_ref_gtf: False
 
 # Specify which GTF entries to retain based on attribute keys & values
 # LHS key - name of attribute in GTF (this can vary between Gencode/Ensembl so double check)
@@ -148,13 +148,13 @@ stringtie_params_csv: config/stringtie_params.csv
 # Use annotated poly(A) sites to help guide transcript assembly?
 # activates '--ptf' option
 # put True if yes, False if no (NO QUOTES around True/False)
-use_point_features: False
+use_point_features: True
 
 # Path to 4 column TSV file of point features passed to '--ptf'
 # Columns are <chromosome> <coordinate> <strand> <type (TSS/CPAS)>
 # To generate, can use <scripts/bed_to_point_features.py> (currently just with PolyASite atlas v2)
 # Only needed if use_point_features is set to True
-point_features_path: data/atlas.cluster.2.0.GRCh38.96_point_features.chr_prefix.tsv
+point_features_path: data/elk1.ds_pas.ptf.tsv
 
 # Default: 0.01
 # can be a single value between 0-1 or a list of values [val1, val2]
