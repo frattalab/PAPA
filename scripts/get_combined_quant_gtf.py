@@ -198,7 +198,7 @@ def update_ext_le_ids(gr,
     return gr
 
 
-def annotate_le_ids(novel_le, ref_le, novel_id_col="gene_id_ref", ref_id_col="gene_id", le_id_outcol="le_id"):
+def annotate_le_ids(novel_le, ref_le, novel_id_col="gene_id_ref", ref_id_col="gene_id", le_id_outcol="le_id", ref_extensions=False):
     '''
     '''
 
@@ -212,6 +212,18 @@ def annotate_le_ids(novel_le, ref_le, novel_id_col="gene_id_ref", ref_id_col="ge
     # Combine into a single set
     # https://blog.finxter.com/union-multiple-sets-in-python/
     ext_gene_ids = set().union(*d_ext_gene_ids.values())
+
+    if ref_extensions:
+        # Want to also consider specific reference events as if novel extensions
+        # {(chr, strand): {gene_id1, gene_id2}}
+        ref_ext_gene_ids = ref_le.apply(lambda df: set(df[df["event_type"].str.contains("extension", regex=False)][ref_id_col]),
+                                         as_pyranges=False)
+
+        n_ref_ext_ids = sum(len(ids_set) for ids_set in ref_ext_gene_ids.values())
+        eprint(f"Number of genes containing extension events sourced from labelled annotated/reference transcripts - {n_ref_ext_ids}")
+
+        # Add gene_ids to existing list
+        ext_gene_ids = ext_gene_ids.union(*ref_ext_gene_ids.values())
 
     # Separate novel & ref grs into genes with novel extensions ('<ref/novel>_le_ext') & those without ('<ref/novel>_le_n_ext')
 
@@ -232,10 +244,6 @@ def annotate_le_ids(novel_le, ref_le, novel_id_col="gene_id_ref", ref_id_col="ge
     # This *should* be the case, but if chr/strand df is unique to one of the concatenated grs then can see different num of cols
     combined_ext = check_concat(combined_ext)
     combined_n_ext = check_concat(combined_n_ext)
-
-
-
-
 
     # make sure gene_id corresponds to reference gene ID
     # Otherwise novel + ref of same gene will be considered separately (annotated in diff column)
@@ -294,6 +302,7 @@ def main(novel_le_path,
          ref_gtf_path,
          ref_attr_key_order,
          trust_exon_number_ref,
+         ref_extensions_string,
          output_prefix
          ):
     '''
@@ -313,6 +322,7 @@ def main(novel_le_path,
 
     eprint(f"Reading reference GTF complete - took {end - start} s")
 
+
     eprint("Extracting last exons for each transcript in reference GTF...")
 
     if trust_exon_number_ref:
@@ -324,6 +334,32 @@ def main(novel_le_path,
         ref_e = add_region_number(ref_e, feature_key="exon", out_col="exon_number")
         ref_le = get_terminal_regions(ref_e)
 
+
+    if ref_extensions_string is not None:
+        # Want to consider specific reference events as if they were extensions
+        # annotate 'event_type' as 'last_exon_extension' (same value as novel events) if their 'transcript_id' value contains ref_extensions_string
+        eprint(f"Identifying reference last exons annotated as extensions i.e. transcript_id containing {ref_extensions_string}")
+        ref_le = ref_le.assign("event_type",
+                               lambda df: pd.Series(np.where(df["transcript_id"].str.contains(ref_extensions_string,
+                                                                                              regex=False),
+                                                             "last_exon_extension",
+                                                             "NULL"
+                                                             )
+                                                    )
+                               )
+
+        n_ref_ext = ref_le.event_type.loc[lambda x: x == "last_exon_extension"].sum()
+
+        if n_ref_ext == 0:
+            raise Exception(f"No reference transcript_id containing provided string - {ref_extensions_string} - were found. Correct or do not pass --ref-extensions-string to avoid this error message")
+
+        else:
+            eprint(f"Number of reference transcript ids containing extensions string - {n_ref_ext}")
+            ref_ext = True
+
+    else:
+        eprint("--ref-extensions-string not provided - all reference transcripts will be 'collapsed' to same last exon ID given overlap")
+        ref_ext = False
 
     eprint("Reading in input GTF of novel last exons...")
 
@@ -344,7 +380,7 @@ def main(novel_le_path,
 
     if n_mult == 0:
         combined_mult = pr.PyRanges()
-        combined_single = annotate_le_ids(novel_le, ref_le, le_id_outcol="le_id")
+        combined_single = annotate_le_ids(novel_le, ref_le, le_id_outcol="le_id", ref_extensions=ref_ext)
 
     else:
         # Split novel_le into novel_le_single (overlaps 1 ref gene ID) & novel_le_mult (overlaps > 1 ref gene ID)
@@ -378,8 +414,8 @@ def main(novel_le_path,
         # Combine across ref & novel, annotate le_ids
         # Note that novel extension events are annotated separately, as these will overlap with their reference counterpart (so need to update assigned le_number)
         eprint("Combining ref & novel last exons objects and grouping last exons based on overlap...")
-        combined_single = annotate_le_ids(novel_le_single, ref_le_single, le_id_outcol="le_id")
-        combined_mult = annotate_le_ids(novel_le_mult, ref_le_mult, le_id_outcol="le_id")
+        combined_single = annotate_le_ids(novel_le_single, ref_le_single, le_id_outcol="le_id", ref_extensions=ref_ext)
+        combined_mult = annotate_le_ids(novel_le_mult, ref_le_mult, le_id_outcol="le_id", ref_extensions=ref_ext)
 
     # GTF containing defined last exons (with le_id etc. defined)
     combined = pr.concat([combined_single, combined_mult])
@@ -520,6 +556,11 @@ if __name__ == '__main__':
                         default=False,
                         help="Whether to 'trust' the exon number attribute in reference GTF as being strand-aware")
 
+    parser.add_argument("--ref-extensions-string",
+                        type=str,
+                        default=None,
+                        help="Treat 'transcript_id' values in reference GTF containing this string as if novel extension events (i.e. they will be considered a distinct 'last exon isoform' to shorter isoform)")
+
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -531,6 +572,7 @@ if __name__ == '__main__':
          args.reference_gtf,
          ref_attr_key_order,
          args.trust_ref_exon_number,
+         args.ref_extensions_string,
          args.output_prefix)
 
     end = timer()
