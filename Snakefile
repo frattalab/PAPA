@@ -30,9 +30,6 @@ LOG_SUBDIR = os.path.join(OUTPUT_DIR, config["logs_subdir_name"], "")
 BMARK_SUBDIR = os.path.join(OUTPUT_DIR, config["benchmarks_subdir_name"], "")
 DAPA_SUBDIR = os.path.join(OUTPUT_DIR, config["diff_apa_subdir_name"], "")
 
-min_frac_vals = param_list(config["min_isoform_fraction_abundance"])
-min_jnc_vals = param_list(config["min_junction_reads"])
-min_cov_vals = param_list(config["min_txipt_coverage"])
 
 include: "rules/filter_gtf.smk"
 include: "rules/stringtie.smk"
@@ -41,10 +38,6 @@ include: "rules/salmon.smk"
 include: "rules/differential_apa.smk"
 
 # sys.stderr.write(OPTIONS + "\n")
-# sys.stderr.write(min_frac_vals + "\n")
-# sys.stderr.write(min_jnc_vals + "\n")
-# sys.stderr.write(min_cov_vals + "\n")
-
 
 localrules: all, gtf_list_by_condition, gtf_list_all_tpm_filtered, check_per_sample_mean_tpm_filtered
 
