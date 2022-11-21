@@ -459,7 +459,13 @@ def find_pas_motifs_3p(gr,
     three_end_seqs = three_end_seqs.apply(lambda x: Seq(x))
 
     # Add to gr
-    gr_3p.seq = three_end_seqs
+    try:
+        gr_3p.seq = three_end_seqs
+
+    except IndexError:
+        # Some of the chr/strand dfs have inconsistent number of cols
+        gr_3p = check_concat(gr_3p)
+        gr_3p.seq = three_end_seqs
 
     # Motifs defined 5'-3' - rev complement sequences on minus strand to match pas motifs
     # Start of seq == 5'end (both strands)
