@@ -1,4 +1,4 @@
-##!/usr/bin/env python3
+#!/usr/bin/env python3
 
 from __future__ import print_function
 import pyranges as pr
@@ -339,23 +339,25 @@ def _pd_merge_gr(df, df_to_merge, how, on, suffixes, to_merge_cols):
                         suffixes=suffixes)
 
 
-# def _check_to_extract_order(attribute, to_extract):
-#     '''
-#     Not implementing yet as need to account for attribute string (e.g. 'exon_number' for 'transcript' or 'gene' fields) not contaning certain tags when others do
-#     This would mean a different order of columns for different rows, which will have unintended consequences
-#     '''
-#
-#     # Get indexes of each
-#     idxs = [attribute.find(attr) for attr in to_extract]
-#
-#     # if not found (-1), need to remove from to_extract
-#
-#     # Sort to_extract according to (L -> R) positions in attribute string
-#     # Otherwise regex breaks
-#     # https://stackoverflow.com/a/9764364
-#     _, sorted_to_extract = (list(l) for l in zip(*sorted(zip(idxs, to_extract))))
-#
-#     return sorted_to_extract
+def _check_to_extract_order(attribute, to_extract):
+    '''
+    Checks & re-orders list of keys present in a string
+    attribute: str of the 'attribute' field from a GTF file
+    to_extract: list of keys wish to extract from attribute string
+
+    - returns to_extract values sorted from left-right occurence in attribute
+    - if values are not found in attribute they are removed from the list
+
+    '''
+
+    # Get indexes of each
+    idxs = [attribute.find(attr) for attr in to_extract]
+    idx_ser = pd.Series(idxs, index=to_extract)
+
+    # if not found (-1), need to remove from to_extract
+    idx_ser = idx_ser[idx_ser != -1]
+
+    return idx_ser.sort_values().index.tolist()
 
 
 def _fetch_attributes(attribute,
@@ -365,36 +367,43 @@ def _fetch_attributes(attribute,
                                   "gene_name"],
                       ):
     '''
+    Extracts specific key-value pairs from a GTF attribute string using a regex into individual columns
     attribute: Series of 'attribute' column string read in from GTF
+    to_extract: list of keys to extract from the attribute string
     '''
 
-    assert to_extract[0] == "gene_id", f"gene_id must be the first attribute to extract, following was found - {to_extract[0]}"
+    # Check order of extract cols matches the order they appear in atttribute column
+    # If not present in 1st row then dropped
+    to_extract_v = _check_to_extract_order(attribute.iloc[0], to_extract)
+
+
+    # assert to_extract[0] == "gene_id", f"gene_id must be the first attribute to extract, following was found - {to_extract[0]}"
 
     # Remove quotes from attributes string
     no_quotes = attribute.str.replace('"', '').str.replace("'", "")
 
     # Assemble regex
     # Regex completely lifted from _fetch_gene_transcript_exon_id (pr.readers._fetch_gene_transcript_exon_id)
+    # Specifically add the '\s' to properly parse cases where key is further present with a suffix (e.g. 'gene_id' & 'gene_id_b' keys)
     # https://github.com/biocore-ntnu/pyranges/blob/a36a2c7fac88f297bf41c529734c2cb6950bed3b/pyranges/readers.py#L210
     # "gene_id.?(.+?);(?:.*transcript_id.?(.+?);)?(?:.*exon_number.?(.+?);)?(?:.*exon_id.?(.+?);)?"
 
-    gene_id = to_extract[0] + "\s(.+?);"
+    first_attr = to_extract_v[0] + "\s(.+?);"
 
-    others = ["(?:.*" + attr + "\s(.+?);)?" for attr in to_extract[1:]]
+    others = ["(?:.*" + attr + "\s(.+?);)?" for attr in to_extract_v[1:]]
 
-    attr_regex = "".join(list(gene_id) + others)
+    attr_regex = "".join(list(first_attr) + others)
 
     # eprint(attr_regex)
 
     df = no_quotes.str.extract(attr_regex,
                                expand=True)  # .iloc[:, [1, 2, 3]]
 
-    df.columns = to_extract
+    df.columns = to_extract_v
 
     # TODO: Why does _fetch_gene_transcript_exon_id need 'annotation' arg for Ensembl? What is it doing?
 
     return df
-
 
 
 def read_gtf_specific(f,
@@ -407,11 +416,13 @@ def read_gtf_specific(f,
                       nrows=None
                       ):
     '''
-    Custom GTF reader almost entirely mimicking read_gtf_restricted, except to extract custom set of attributes
+    GTF reader to extract a custom set of attributes. Almost entirely mimics read_gtf_restricted, except that can provide own list of attributes to extract
     No way near as flexible or feature-rich as normal function (yet)
 
-    THE ORDER OF KEYS IN attr_to_extract MUST BE SAME ORDER THESE KEYS APPEAR IN THE STRING
-    (not every row has to have each key e.g. 'exon_number' for 'gene' entries),
+    Notes:
+    - Since the function uses a regex to extract key-value pairs, the order of keys in attr_to_extract is very important
+    - The function splits by 'feature' (i.e. 'gene', 'exon' or 'transcript') to try to account for different keys between features (e.g. gene doesn't have 'exon_number')
+    - The order is checked, but only against the FIRST value in each group (of a chunk of the input file). For reference GTFs this is probably sufficient, but if you have non-standard/rare keys in attr_to_extract they will most likely be parsed incorrectly
     '''
 
     dtypes = {
@@ -441,8 +452,11 @@ def read_gtf_specific(f,
             cols_to_concat = "Chromosome Start End Strand Feature Score".split(
             )
 
-        extract = _fetch_attributes(df.Attribute, attr_to_extract)
-        extract.columns = attr_to_extract ## TODO: is this necessary? df has columns added in _fetch_attributes
+        # Extract specific key-value pairs from the attribute string/column
+        # Since different features (e.g. 'gene', 'exon') often have different attributes
+        # Provided order in attr_to_extract may not be identical (would break the regex)
+        # Extracts the provided attributes (if present) whilst checking the order they are observed (hackily in the first row of the group)
+        extract = df.groupby("Feature")["Attribute"].apply(_fetch_attributes, attr_to_extract)
 
         if "exon_number" in extract.columns:
             extract.exon_number = extract.exon_number.astype(float)
@@ -456,7 +470,7 @@ def read_gtf_specific(f,
     df.loc[:, "Start"] = df.Start - 1
 
     if not as_df:
-        return PyRanges(df)
+        return pr.PyRanges(df)
     else:
         return df
 
