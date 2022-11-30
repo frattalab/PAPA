@@ -422,7 +422,8 @@ rule get_combined_quant_gtf:
         le_gtf = os.path.join(TX_FILT_SUBDIR, "novel_ref_combined.last_exons.gtf"),
         tx2le = os.path.join(TX_FILT_SUBDIR, "novel_ref_combined.tx2le.tsv"),
         tx2gene = os.path.join(TX_FILT_SUBDIR, "novel_ref_combined.tx2gene.tsv"),
-        le2gene = os.path.join(TX_FILT_SUBDIR, "novel_ref_combined.le2gene.tsv")
+        le2gene = os.path.join(TX_FILT_SUBDIR, "novel_ref_combined.le2gene.tsv"),
+        le2genename = os.path.join(TX_FILT_SUBDIR, "novel_ref_combined.le2genename.tsv")
 
     params:
         script = "scripts/get_combined_quant_gtf.py",

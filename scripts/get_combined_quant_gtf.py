@@ -73,17 +73,68 @@ def _df_add_common_gene_id_col(df, gene_col, novel_id_str, novel_ref_gene_col):
 
 
 def add_common_gene_id_col(gr,
-                           out_col="ref_gene_id",
-                           gene_col="gene_id",
-                           novel_id_str="PAPA",
-                           novel_ref_gene_col="gene_id_ref",
+                      out_col="ref_gene_id",
+                      id_col1="gene_id",
+                      id_col1_str="PAPA",
+                      id_col2="gene_id_ref",
                            ):
 
     '''
+    Add a common identifier column between two related columns based on value in one column.
+    If values of the first column ('id_col1') contains a given string ('id_col1_str', exact match no regex), report the value of 'id_col2' for that row
+    Otherwise use the value from 'id_col1'
+
+    The typical use case is output of e.g. get_novel_last_exons.py / filter_tx_by_three_end.py, where a novel assembled event will have the overlapping reference gene ID/name in attribute column under 'gene_id_ref'
+    An annotation GTF will typically have the same attribute stored under 'gene_id' key.
+    This function will unify the values into a single new column, using the value of 'gene_id_ref' where a novel event is encountered, otherwise the value in 'gene_id'
     '''
 
     return gr.assign(out_col,
-                     lambda df: _df_add_common_gene_id_col(df, gene_col, novel_id_str, novel_ref_gene_col)
+                     lambda df: _df_add_common_gene_id_col(df, id_col1, id_col1_str, id_col2)
+                     )
+
+
+def _df_add_common_gene_name_col(df, col_to_check, col_to_check_str, id_col_t, id_col_f):
+    '''
+    Internal to add_common_gene_name_col
+    returns pd.Series
+    '''
+
+    if id_col_t not in df.columns:
+        # This means chr/strand pair df has no novel entries
+        # gene_col = reference gene col
+        return df[id_col_f]
+
+    else:
+        return pd.Series(np.where(df[col_to_check].str.contains(col_to_check_str, regex=False),
+                                  df[id_col_t], # olapping ref gene name for novel
+                                  df[id_col_f] # is a ref gene/last exon (use ref gene_name)
+                                  )
+                         )
+
+
+def add_common_gene_name_col(gr,
+                             out_col="ref_gene_name",
+                             col_to_check="gene_id",
+                             col_to_check_str="PAPA",
+                             id_col_t="gene_name_ref",
+                             id_col_f="gene_name"
+                           ):
+
+    '''
+    Add a common identifier column between two related columns based on value in one column.
+    If values of the first column ('id_col1') contains a given string ('id_col1_str', exact match no regex), report the value of 'id_col2' for that row
+    Otherwise use the value from 'id_col1'
+
+    The typical use case is output of e.g. get_novel_last_exons.py / filter_tx_by_three_end.py, where a novel assembled event will have the overlapping reference gene ID/name in attribute column under 'gene_id_ref'
+    An annotation GTF will typically have the same attribute stored under 'gene_id' key.
+    This function will unify the values into a single new column, using the value of 'gene_id_ref' where a novel event is encountered, otherwise the value in 'gene_id'
+    '''
+
+    return gr.assign(out_col,
+                     lambda df: _df_add_common_gene_name_col(df, col_to_check,
+                                                             col_to_check_str, id_col_t,
+                                                             id_col_f)
                      )
 
 
@@ -252,6 +303,7 @@ def annotate_le_ids(novel_le, ref_le, novel_id_col="gene_id_ref", ref_id_col="ge
     if len(combined_ext) > 0:
 
         combined_ext = add_common_gene_id_col(combined_ext)
+        combined_ext = add_common_gene_name_col(combined_ext)
         combined_ext = combined_ext.cluster(by="ref_gene_id")
 
         # Assign 5'-3' 1..n 'last_exon number' for each gene
@@ -275,6 +327,7 @@ def annotate_le_ids(novel_le, ref_le, novel_id_col="gene_id_ref", ref_id_col="ge
 
 
     combined_n_ext = add_common_gene_id_col(combined_n_ext)
+    combined_n_ext = add_common_gene_name_col(combined_n_ext)
 
     combined_n_ext = combined_n_ext.cluster(by="ref_gene_id")
 
@@ -364,7 +417,7 @@ def main(novel_le_path,
     eprint("Reading in input GTF of novel last exons...")
 
     # novel_le = pr.read_gtf(novel_le_path)
-    novel_le = read_gtf_specific(novel_le_path, ["gene_id", "transcript_id", "exon_number", "gene_id_ref", "Start_ref", "End_ref", "event_type"])
+    novel_le = read_gtf_specific(novel_le_path, ["gene_id", "transcript_id", "exon_number", "gene_id_ref", "gene_name_ref", "Start_ref", "End_ref", "event_type"])
 
 
     # Make sure gene_id_ref has a single value string if only 1 distinct gene ID (Otherwise collapse to non-redundant comma-separated string of gene IDs)
@@ -483,11 +536,25 @@ def main(novel_le_path,
              header=True)
      )
 
+    eprint(f"Writing 'le2genename' (le_id | gene_name) to TSV... - {output_prefix + '.le2genename.tsv'}")
+    (quant_combined.subset(lambda df: df.duplicated(subset=["ref_gene_id"], keep=False))
+     .as_df()
+     [["le_id", "ref_gene_name"]]
+     .drop_duplicates()
+     .sort_values(by="le_id")
+     .rename(columns={"ref_gene_name": "gene_name"})
+     .to_csv(output_prefix + ".le2genename.tsv",
+             sep="\t",
+             index=False,
+             header=True)
+     )
+
     eprint(f"writing 'info' table (tx_id | le_id | gene_id | gene_name | event_type | coords | annot_status) to file - {output_prefix + '.info.tsv'}")
     (quant_combined.subset(lambda df: df.duplicated(subset=["ref_gene_id"], keep=False))
      .as_df()
-     [["transcript_id", "le_id", "ref_gene_id", "gene_name", "event_type", "Chromosome", "Start", "End", "Strand"]]
-     .rename(columns={"ref_gene_id": "gene_id"})
+     [["transcript_id", "le_id", "ref_gene_id", "ref_gene_name", "event_type", "Chromosome", "Start", "End", "Strand"]]
+     .rename(columns={"ref_gene_id": "gene_id",
+                      "ref_gene_name": "gene_name"})
      .drop_duplicates()
      .assign(**{"annot_status": lambda df: np.where(df["transcript_id"].str.contains("PAPA", regex=False),
                                                     "novel",
@@ -502,16 +569,13 @@ def main(novel_le_path,
 
     )
 
-
-
-
     eprint("Writing last exon GTFs to file...")
 
     eprint(f"Writing quantification-ready last exons GTF to file - {output_prefix + '.quant.last_exons.gtf'}")
-    quant_combined.to_gtf(output_prefix + ".quant.last_exons.gtf")
+    quant_combined.drop(["gene_id_ref", "gene_name_ref", "Cluster"]).to_gtf(output_prefix + ".quant.last_exons.gtf")
 
     eprint(f"Writing last exons GTF to file - {output_prefix + '.last_exons.gtf'}")
-    combined.to_gtf(output_prefix + ".last_exons.gtf")
+    combined.drop(["gene_id_ref", "gene_name_ref", "Cluster"]).to_gtf(output_prefix + ".last_exons.gtf")
 
 
 
