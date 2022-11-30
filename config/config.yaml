@@ -220,6 +220,7 @@ max_fraction_multi_mapped: 0.95
 
 # prefix for name of output transcripts (passed to <-l>)
 # String
+# DO NOT CHANGE THIS UNTIL ISSUE #40 us resolved - https://github.com/frattalab/PAPA/issues/40
 label: "PAPA"
 
 # # Merge parameters
