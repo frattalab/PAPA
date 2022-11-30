@@ -51,10 +51,12 @@ pyranges_gtf_cols = "Chromosome   Source   Feature    Start     End       Score 
 # Minimal cols needed from GTF for processing (no need to carry loads of cols)
 processing_gtf_cols_en = pyranges_gtf_cols + ["gene_id",
                                               "transcript_id",
+                                              "gene_name",
                                               "exon_number"]
 
 processing_gtf_cols_n_en = pyranges_gtf_cols + ["gene_id",
-                                                "transcript_id"]
+                                                "transcript_id",
+                                                "gene_name"]
 
 
 def _df_add_region_rank(df,
@@ -223,6 +225,7 @@ def add_3p_extension_length(gr,
                             suffix="_b",
                             ref_cols_to_keep=["gene_id",
                                               "transcript_id",
+                                              "gene_name",
                                               "exon_id",
                                               "Start",
                                               "End",
@@ -452,6 +455,7 @@ def find_spliced_events(novel_li,
                         suffix="_ref",
                         ref_cols_to_keep=["gene_id",
                                           "transcript_id",
+                                          "gene_name",
                                           "exon_id",
                                           "Start",
                                           "End",
@@ -699,8 +703,8 @@ def main(input_gtf_path,
 
     extensions = extensions.drop("region_rank")
 
-    # eprint(f"extensions cols \n{extensions.columns}")
-
+    # Add the _ref suffix so it's obvious the col came from the reference GTF
+    extensions = extensions.apply(lambda df: df.rename(columns={"gene_name": "gene_name_ref"}))
     # Identify spliced events
     # First filter novel events for non-extensions
     eprint("Finding novel spliced events - filtering for non-extensions...")
@@ -737,7 +741,6 @@ def main(input_gtf_path,
 
     eprint(f"Complete - took {end - start} s")
 
-    # eprint(f"spliced columns {spliced.columns}")
     # Spliced is last introns, want corresponding last exons in output
     spliced_le = novel_le.subset(lambda df: df["transcript_id"].isin(set(spliced.transcript_id)))
 
@@ -746,9 +749,13 @@ def main(input_gtf_path,
     spliced = spliced[["transcript_id",
                        "gene_id_ref",
                        "transcript_id_ref",
+                       "gene_name", # comes from ref GTF, but not always gene_name in StringTie output ('ref_gene_name') will prefer matching from ref
                        "Start_ref",
                        "End_ref",
                        "event_type"]]
+
+    # Add the _ref suffix so it's obvious the col came from the reference GTF
+    spliced = spliced.apply(lambda df: df.rename(columns={"gene_name": "gene_name_ref"}))
 
     spliced_cols = spliced.columns.tolist()
 
