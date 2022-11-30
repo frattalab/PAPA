@@ -624,6 +624,8 @@ def main(gtf_path,
     # adds atlas_filter (1/0) and atlas_distance (nt) columns to last exons objec
     le = nearest_atlas_site(le, atlas, max_atlas_dist)
 
+    eprint(f"Nearest atlas site to predicted 3'end distance distribution\n{le.nearest_atlas_distance.describe(percentiles=[i / 10 for i in range(0,11)])}")
+
     # Select representative atlas site for each last exon passing atlas filter
     # Update 3'end of last exon to atlas site coordinate
     # Do this before finding motifs so found correspond to updated 3'end not predicted
