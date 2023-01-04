@@ -12,7 +12,7 @@ data/Cont*
 data/TDP43*
 scripts/.ipynb_checkpoints/
 .Rproj.user
-test_data_output/*
+test_data_output*
 tests/test_aligned/STAR_aligned/*.out
 tests/test_aligned/STAR_aligned/*.out.t*
 tests/test_aligned/STAR_aligned/*_STAR*
