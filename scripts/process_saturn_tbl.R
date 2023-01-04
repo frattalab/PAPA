@@ -14,8 +14,8 @@ option_list <- list(make_option(c("-i", "--input-tsv"),
                     make_option(c("-o", "--output-prefix"),
                                 type = "character",
                                 dest = "output_prefix",
-                                default="differential_usage",
-                                help = "Prefix to names of output table <prefix>.results.processed.tsv for SatuRn output dataframe (default = %default)")
+                                default="differential_usage.results",
+                                help = "Prefix to name of augmented SatuRn results output table <prefix>.processed.tsv (default = %default)")
 )
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -106,7 +106,7 @@ res_jned <- left_join(res_jned,
                       by = "le_id")
 
 write.table(x = res_jned,
-            file = paste(output_prefix, ".results.processed.tsv", sep = ""),
+            file = paste(output_prefix, ".processed.tsv", sep = ""),
             sep = "\t",
             col.names = T,
             row.names = F, 

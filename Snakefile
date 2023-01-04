@@ -47,8 +47,8 @@ wildcard_constraints:
 
 rule all:
     input:
-        rules.saturn_apa.output.rda if config["run_differential"] else rules.tx_to_le_quant.output.ppau,
-        rules.saturn_apa.output.tbl if config["run_differential"] else rules.tx_to_le_quant.output.counts,
+        rules.process_saturn_tbl.output.processed_tbl if config["run_differential"] else rules.tx_to_le_quant.output.ppau,
+        rules.tx_to_le_quant.output.counts,
         os.path.join(DAPA_SUBDIR,
                      "summarised_pas_quantification.tpm.tsv"),
         os.path.join(DAPA_SUBDIR,

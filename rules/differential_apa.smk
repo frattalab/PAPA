@@ -58,7 +58,7 @@ rule saturn_apa:
         sample_tbl = config["sample_tbl"]
 
     output:
-        tbl = os.path.join(DAPA_SUBDIR,
+        saturn_tbl = os.path.join(DAPA_SUBDIR,
                             "saturn_apa.results.tsv"),
         rda = os.path.join(DAPA_SUBDIR,
                            "saturn_apa.image.RData")
@@ -95,3 +95,42 @@ rule saturn_apa:
         -o {params.output_prefix} \
         &> {log}
         """
+
+
+rule process_saturn_tbl:
+    input:
+        saturn_tbl = rules.saturn_apa.output.saturn_tbl,
+        info_tbl = rules.get_combined_quant_gtf.output.info_tbl,
+        ppau = rules.tx_to_le_quant.output.ppau
+    
+    output:
+        processed_tbl = os.path.join(DAPA_SUBDIR,
+                                    "saturn_apa.results.processed.tsv")
+    
+    params:
+        script = "scripts/process_saturn_tbl.R",
+        output_prefix = os.path.join(DAPA_SUBDIR,
+                                    "saturn_apa.results")
+
+    conda:
+        "../envs/papa_r.yaml"
+
+    log:
+        os.path.join(LOG_SUBDIR,
+                     config["diff_apa_subdir_name"],
+                     "process_saturn_tbl.log")
+
+    benchmark:
+        os.path.join(BMARK_SUBDIR,
+                     config["diff_apa_subdir_name"],
+                     "process_saturn_tbl.txt")
+
+    shell:
+        """
+        Rscript {params.script} \
+        -i {input.saturn_tbl} \
+        -a {input.info_tbl} \
+        -p {input.ppau} \
+        -o {params.output_prefix} \
+        &> {log}
+        """   
