@@ -32,7 +32,7 @@ annotation_gtf: tests/test_annotations/test_transcripts_reference.gtf
 
 # Source of GTF file of reference transcripts ('annotation_gtf')
 # One of 'gencode' if GENCODE or "ensembl" for ENSEMBL other string
-# Used for Salmon index & scripts/filter_tx_by_intron_chain.py (for gene type filtering)
+# Used for Salmon index (for gene type filtering)
 annotation_source: "gencode"
 
 # Path to FASTA file containing genome sequence
@@ -52,6 +52,11 @@ polya_site_atlas: tests/test_annotations/test_pas.bed
 # Whether to perform additional processing of BAM files prior to transcript assembly with StringTie
 # Put "none" for now. Other options possibly added in future...
 pre_stringtie_processing: "none"
+
+# Whether to run differential usage analysis with SatuRn - bool
+# If False, pipeline terminates after generating matrices of summarised quantification for each 'last exon isoform'
+run_differential: True
+
 
 ###
 # Reference GTF filtering
@@ -220,6 +225,7 @@ max_fraction_multi_mapped: 0.95
 
 # prefix for name of output transcripts (passed to <-l>)
 # String
+# DO NOT CHANGE THIS UNTIL ISSUE #40 us resolved - https://github.com/frattalab/PAPA/issues/40
 label: "PAPA"
 
 # # Merge parameters
@@ -245,7 +251,18 @@ salmon_quant_threads: 2
 
 salmon_kmer_size: 31
 
+#####-----------------------------------------
+### DIFFERENTIAL USAGE OPTIONS/PARAMETERS
+#####-----------------------------------------
 
+# NOTE: all following parameters are ignored if 'run_differential' is set to False
+
+# Minimum mean count in any condition for an isoform to be retained for differential usage analysis
+# Default: 10
+min_mean_count: 10
+
+# Number of threads to use for SatuRn analysis
+saturn_threads: 2
 
 #####-----------------------------------------
 # OUTPUT SUBDIRECTORY NAMES
