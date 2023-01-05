@@ -17,7 +17,7 @@ rule custom_txome_fasta:
     For use with Salmon
     '''
     input:
-        rules.get_combined_quant_gtf.output.quant_gtf
+        rules.get_combined_quant_gtf.output.quant_gtf if run_identification else rules.get_ref_quant_gtf.output.quant_gtf
 
     output:
         os.path.join(SALMON_SUBDIR, "papa.transcripts.fa")

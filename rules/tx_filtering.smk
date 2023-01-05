@@ -430,7 +430,8 @@ rule get_combined_quant_gtf:
         script = "scripts/get_combined_quant_gtf.py",
         output_prefix = os.path.join(TX_FILT_SUBDIR,
                                      "novel_ref_combined"),
-        trust_ref_exon_number = ""
+        trust_ref_exon_number = "",
+        ref_extensions_string = "" if len(config["ref_gtf_extensions_string"]) == 0 else "--ref-extensions-string " + config["ref_extensions_string"]
 
     conda:
         "../envs/papa.yaml"
@@ -451,6 +452,53 @@ rule get_combined_quant_gtf:
         -i {input.novel_gtf} \
         -r {input.ref_gtf} \
         {params.trust_ref_exon_number} \
+        {params.ref_extensions_string} \
+        -o {params.output_prefix} \
+        &> {log}
+        """
+
+rule get_ref_quant_gtf:
+    '''
+    '''
+    input:
+        gtf = rules.filter_ref_gtf.output if config["filter_ref_gtf"] else GTF
+
+    output:
+        quant_gtf = os.path.join(TX_FILT_SUBDIR,
+                                 "ref.quant.last_exons.gtf"),
+        le_gtf = os.path.join(TX_FILT_SUBDIR, "ref.last_exons.gtf"),
+        tx2le = os.path.join(TX_FILT_SUBDIR, "ref.tx2le.tsv"),
+        tx2gene = os.path.join(TX_FILT_SUBDIR, "ref.tx2gene.tsv"),
+        le2gene = os.path.join(TX_FILT_SUBDIR, "ref.le2gene.tsv"),
+        le2genename = os.path.join(TX_FILT_SUBDIR, "ref.le2genename.tsv"),
+        info_tbl = os.path.join(TX_FILT_SUBDIR, "ref.info.tsv")
+
+    params:
+        script = "scripts/get_ref_quant_gtf.py",
+        output_prefix = os.path.join(TX_FILT_SUBDIR,
+                                     "ref"),
+        trust_ref_exon_number = "",
+        ref_extensions_string = "" if len(config["ref_gtf_extensions_string"]) == 0 else "--ref-extensions-string " + config["ref_extensions_string"]
+
+    conda:
+        "../envs/papa.yaml"
+
+    benchmark:
+        os.path.join(BMARK_SUBDIR,
+                     config["tx_filtering_subdir_name"],
+                     "get_ref_quant_gtf.txt")
+
+    log:
+        os.path.join(LOG_SUBDIR,
+                     config["tx_filtering_subdir_name"],
+                     "get_ref_quant_gtf.log")
+
+    shell:
+        """
+        python {params.script} \
+        -i {input.gtf} \
+        {params.trust_ref_exon_number} \
+        {params.ref_extensions_string} \
         -o {params.output_prefix} \
         &> {log}
         """
