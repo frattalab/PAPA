@@ -86,16 +86,16 @@ def annotate_le_ids_ref(ref_le: pr.PyRanges,ref_id_col="gene_id",le_id_outcol="l
         # .cluster(strand=None) groups as ('I') expect i.e. only overlapping intervals on the same strand can be merged
         ref_le_ext = ref_le
         ref_le_n_ext = pr.PyRanges()
-        ref_le = ref_le.cluster(by=ref_id_col, strand=None)
-        ref_le = cluster_to_region_number(ref_le, ref_id_col)
+        ref_le_ext = ref_le_ext.cluster(by=ref_id_col, strand=None)
+        ref_le_ext = cluster_to_region_number(ref_le_ext, ref_id_col)
         
         eprint("assigning 'le_id' (last exon ID) for each gene...")
 
-        ref_le = ref_le.assign(le_id_outcol,
+        ref_le_ext = ref_le_ext.assign(le_id_outcol,
                                lambda df: df[ref_id_col] + "_" + df["le_number"].astype(int).astype(str),
                     )
         
-        out = ref_le
+        
     
     else:
         # Need to assign le_ids for genes with/without extensions separately
@@ -103,28 +103,29 @@ def annotate_le_ids_ref(ref_le: pr.PyRanges,ref_id_col="gene_id",le_id_outcol="l
         ref_le_n_ext = ref_le.subset(lambda df: ~(df[ref_id_col].isin(ref_ext_gene_ids)))
         
     
-    ref_le_n_ext = ref_le_n_ext.cluster(by=ref_id_col, strand=None)
-    ref_le_n_ext = cluster_to_region_number(ref_le_n_ext, ref_id_col)
+        ref_le_n_ext = ref_le_n_ext.cluster(by=ref_id_col, strand=None)
+        ref_le_n_ext = cluster_to_region_number(ref_le_n_ext, ref_id_col)
     
-    ref_le_ext = ref_le_ext.cluster(by=ref_id_col, strand=None)
-    ref_le_ext = cluster_to_region_number(ref_le_ext, ref_id_col)
+        ref_le_ext = ref_le_ext.cluster(by=ref_id_col, strand=None)
+        ref_le_ext = cluster_to_region_number(ref_le_ext, ref_id_col)
         
-    eprint("assigning 'le_id' (last exon ID) for each gene...")
-    ref_le_n_ext = ref_le_n_ext.assign(le_id_outcol,
-                           lambda df: df[ref_id_col] + "_" + df["le_number"].astype(int).astype(str),
-                        )
+        eprint("assigning 'le_id' (last exon ID) for each gene...")
+        ref_le_n_ext = ref_le_n_ext.assign(le_id_outcol,
+                               lambda df: df[ref_id_col] + "_" + df["le_number"].astype(int).astype(str),
+                            )
     
-    ref_le_ext = ref_le_ext.assign(le_id_outcol,
-                           lambda df: df[ref_id_col] + "_" + df["le_number"].astype(int).astype(str)
+        ref_le_ext = ref_le_ext.assign(le_id_outcol,
+                                       lambda df: df[ref_id_col] + "_" + df["le_number"].astype(int).astype(str)
     )
     
-    # Extension events - need to update le number so extension = own event (for last_extensions)
-    ref_le_ext = update_ext_le_ids(ref_le_ext,
+        # Extension events - need to update le number so extension = own event (for last_extensions)
+        ref_le_ext = update_ext_le_ids(ref_le_ext,
                                        type_col="event_type",
                                        le_ext_key="last_exon_extension",
                                        id_col=ref_id_col,
                                        le_id_col=le_id_outcol
                                        )
+    
     
     out = pr.concat([ref_le_ext, ref_le_n_ext])
     
@@ -166,6 +167,9 @@ def main(ref_gtf_path,
         # Annotate as first, internal or last relative to tx
         ref_e = add_region_rank(ref_e)
         ref_le = get_terminal_regions(ref_e)
+    
+    eprint(ref_e.region_rank.value_counts())
+    
 
     eprint("Extracting introns for each transcript in reference GTF...")
 
@@ -173,6 +177,8 @@ def main(ref_gtf_path,
     # Add region number and annotate as first, internal or last
     ref_i = add_region_number(ref_i, feature_key="intron", out_col="intron_number")
     ref_i = add_region_rank(ref_i, region_number_col="intron_number")
+
+    eprint(ref_i.region_rank.value_counts())
 
     ref_li = get_terminal_regions(
         ref_i, feature_key="intron", region_number_col="intron_number"
@@ -388,7 +394,7 @@ if __name__ == "__main__":
         "--output-prefix",
         dest="output_prefix",
         type=str,
-        default="novel_ref_combined",
+        default="ref",
         help="""path to/prefix for output files.
                                 '.quant.last_exons.gtf' is suffixed for GTF of unique last exons regions for quantification,
                                 '.last_exons.gtf' for GTF of last exons,
