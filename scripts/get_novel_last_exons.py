@@ -260,7 +260,7 @@ def add_3p_extension_length(gr,
                            lambda df: df["End"] - df["End" + suffix] if (df["Strand"] == "+").all() else
                            df["Start" + suffix] - df["Start"],
                            nb_cpu=nb_cpu)
-
+   
 
     # To avoid capturing extensions of shorter isoforms (that really just are the longer known isoform)
     # Pick the smallest extension for each transcripts
@@ -377,9 +377,13 @@ def find_extension_events(novel_le,
 
     # Find events extending 3'ends of ref exon, add 3p_extension_length (nt) column
     # 1 length per le returned (smallest)
-    # Events with no overlap with ref exons are dropped
+    # Events with no overlap with ref exons are dropped 
     novel_le_ext = add_3p_extension_length(novel_le, ref_exons, suffix=suffix)
 
+    # Remove any negative/0 distances (i.e. its 3'end is internal/identical to at least one annotated exon)
+    # Note: don't want to track these as could still be a valid spliced isoform (and is never an extension to begin with)
+    novel_le_ext = novel_le_ext.subset(lambda df: df["3p_extension_length"].ge(1))
+    
     pre_len_ids = set(novel_le_ext.as_df()[id_col])
 
     eprint(f"Number of events with any 3' ref exon extension - {len(pre_len_ids)}")
@@ -443,7 +447,7 @@ def find_extension_events(novel_le,
     eprint(f"Number of events of each type- {ev_types}")
 
     if return_filtered_ids:
-        return novel_le_ext, post_len_ids, post_tol_ids
+        return novel_le_ext, min_len_filt_ids, end_5p_filt_ids
 
     else:
         return novel_le_ext

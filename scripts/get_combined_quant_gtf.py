@@ -19,7 +19,7 @@ from get_novel_last_exons import (
     find_extension_events,
     find_spliced_events,
     _filter_gr_for_not_tx,
-    add_region_rank,
+    add_region_rank, no_overlap_3p_ids
 )
 import sys
 import argparse
@@ -392,11 +392,11 @@ def annotate_le_ids(
 def annotate_ref_event_types(
     le: pr.PyRanges,
     li: pr.PyRanges,
-    ref_exons: pr.PyRanges,
-    ref_introns: pr.PyRanges,
-    remove_last_exon_extensions=True,
+    ref_nl_exons: pr.PyRanges,
+    ref_nl_introns: pr.PyRanges,
+    suffix="_ref"
 ):
-    """_summary_
+    '''_summary_
 
     _extended_summary_
 
@@ -406,64 +406,79 @@ def annotate_ref_event_types(
         _description_
     li : pr.PyRanges
         _description_
-    ref_exons : pr.PyRanges
+    ref_nl_exons : pr.PyRanges
         _description_
-    ref_introns : pr.PyRanges
+    ref_nl_introns : pr.PyRanges
         _description_
-    remove_last_exon_extensions : bool, optional
-        _description_, by default True
+    suffix : str, optional
+        _description_, by default "_ref"
 
     Returns
     -------
     _type_
         _description_
-    """
+    '''
+    
+    def_rank_col = "region_rank"
+    
+    # must be present otherwise event type definition fails
+    assert def_rank_col in ref_nl_exons.columns
+    if def_rank_col in le.columns:
+        rank_col_exons = def_rank_col + suffix # will be suffixed when join rows
+    else:
+        rank_col_exons = def_rank_col
+        
+    assert def_rank_col in ref_nl_introns.columns
+    if def_rank_col in li.columns:
+        rank_col_introns = def_rank_col + suffix # will be suffixed when join rows
+    else:
+        rank_col_introns = def_rank_col
+        
+    # First, check that 3'ends of last exons do not overlap with first/internal exons
+    # (Note: these would be removed downstream anyway)
+    no_nl_exon_overlap_ids = no_overlap_3p_ids(le, ref_nl_exons)
+    eprint(f"Number of last exons without 3'ends internal to first/internal exons - {len(no_nl_exon_overlap_ids)}")
+    
+    le = le.subset(lambda df: df["transcript_id"].isin(no_nl_exon_overlap_ids))
+    li = li.subset(lambda df: df["transcript_id"].isin(no_nl_exon_overlap_ids))
 
     # First identify extensions - for ref events these will just be first/internal
     # Don't care about checking 5' ends of last exons as trusting reference
     extensions = find_extension_events(
         le,
-        ref_exons,
-        min_extension_length=0,  # min_extension_length - if completely contained will be removed later
+        ref_nl_exons,
+        min_extension_length=1,  # min_extension_length - if completely contained will be removed later
         first_5p_tolerance=0,  # dummy value  as not checking
         other_5p_tolerance=0,  # dummy value as not checking
+        rank_col=rank_col_exons, # le & ref_le contain this col so will be suffixed when join
         tolerance_filter=False,
         return_filtered_ids=False,
+        suffix=suffix
     )
 
-    extensions = extensions.drop("region_rank")
-    # eprint(extensions.columns)
-
-    # blacklist 'last exon extensions' - this prevents longer isoform of last exon being called as an extension, when in reality we're collapsing these into a single isoform...
-    if remove_last_exon_extensions:
-        le_ext = set(
-            extensions.subset(
-                lambda df: df["event_type"] == "last_exon_extension"
-            ).transcript_id
-        )
-        extensions = extensions.subset(
-            lambda df: df["event_type"] != "last_exon_extension"
-        )
+    extensions = extensions.drop(rank_col_exons)
 
     # Identify spliced events (in theory this should be all other events, just want to annotate their relative location in gene)
     # First filter novel events for non-extensions
 
-    if remove_last_exon_extensions:
-        li_le_ext = li.subset(lambda df: df["transcript_id"].isin(le_ext))
-
-    else:
-        li_le_ext = pr.PyRanges()
-
-    li = li.apply_pair(
+    li_n_ext = li.apply_pair(
         extensions, lambda df, df2: _filter_gr_for_not_tx(df, df2), as_pyranges=True
     )
 
-    # add back in last exon extensions if don't want to allow as possible classification (generally case for ref events - will spuriously be called as extensions of shorter annotated isoforms)
-    li = pr.concat([li, li_le_ext])
-
-    spliced = find_spliced_events(
-        li, ref_introns, tolerance_filter=True
+    # finds and annotates LIs that are internal to the gene (i.e. 5'ss matches a first/internal SJ of another tx)
+    spliced_nl = find_spliced_events(
+        li_n_ext, ref_nl_introns, tolerance_filter=True, rank_col=rank_col_introns
     )  # will check for 5'ss matches as just reporting alt SJs for ref le (prevents overloading)
+    
+    # Everything else remaining will be 'last exon spliced'
+    # Want to keep same metadata as first/internal, so will re-run against self
+    li_n_ext_les = li_n_ext.subset(lambda df: ~df["transcript_id"].isin(set(spliced_nl.transcript_id)))
+    
+    spliced_l = find_spliced_events(
+        li_n_ext_les, li_n_ext_les, tolerance_filter=True, rank_col=rank_col_introns
+    ) 
+    
+    spliced = pr.concat([spliced_nl, spliced_l])
 
     # Spliced is last introns, want corresponding last exons in output
     spliced_le = le.subset(

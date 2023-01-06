@@ -168,9 +168,11 @@ def main(ref_gtf_path,
         ref_e = add_region_rank(ref_e)
         ref_le = get_terminal_regions(ref_e)
     
-    eprint(ref_e.region_rank.value_counts())
+    # Also get a gr of non-last reference exons
+    ref_e_nl = pr.concat(
+        [get_terminal_regions(ref_e, which_region="first"), get_internal_regions(ref_e)]
+    )
     
-
     eprint("Extracting introns for each transcript in reference GTF...")
 
     ref_i = ref.features.introns(by="transcript")
@@ -178,11 +180,15 @@ def main(ref_gtf_path,
     ref_i = add_region_number(ref_i, feature_key="intron", out_col="intron_number")
     ref_i = add_region_rank(ref_i, region_number_col="intron_number")
 
-    eprint(ref_i.region_rank.value_counts())
-
     ref_li = get_terminal_regions(
         ref_i, feature_key="intron", region_number_col="intron_number"
     )
+    
+    ref_i_nl = pr.concat(
+        [get_terminal_regions(ref_i, feature_key="intron", region_number_col="intron_number", which_region="first"),
+         get_internal_regions(ref_i, feature_key="intron", region_number_col="intron_number")]
+        )
+    
 
     # Assign event types for reference LEs
     if ref_extensions_string is not None:
@@ -219,7 +225,7 @@ def main(ref_gtf_path,
 
         # Annotate as first/internal extensions if applicable, otherwise a distinct spliced last exon
         ref_le_n_ext = annotate_ref_event_types(
-            ref_le_n_ext, ref_li, ref_e, ref_i, remove_last_exon_extensions=True
+            ref_le_n_ext, ref_li, ref_e_nl, ref_i_nl,
         )
 
         ref_le = pr.concat([ref_le_ext, ref_le_n_ext])
@@ -230,8 +236,9 @@ def main(ref_gtf_path,
         )
         ref_ext = False
 
+        # Providing non-last exons here otherwise last exons cannot be an extension of self
         ref_le = annotate_ref_event_types(
-            ref_le, ref_li, ref_e, ref_i, remove_last_exon_extensions=True
+            ref_le, ref_li, ref_e_nl, ref_i_nl,
         )
         
     # Add an identifier grouping overlapping last exons together
@@ -243,9 +250,7 @@ def main(ref_gtf_path,
     eprint(
         "Extracting unique regions for last exons overlapping reference first/internal exons"
     )
-    ref_e_nl = pr.concat(
-        [get_terminal_regions(ref_e, which_region="first"), get_internal_regions(ref_e)]
-    )
+
 
     eprint(
         "Generating 'unique regions' for last exons overlapping non-last reference exons..."
