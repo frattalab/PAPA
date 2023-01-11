@@ -30,6 +30,10 @@ strandedness: "--fr"
 # - Quantify reference transcripts with Salmon
 annotation_gtf: tests/test_annotations/test_transcripts_reference.gtf
 
+# Reference GTF - treat 'transcript_id' values containing this string as if a novel extension (i.e. will be considered as a distinct isoform for summarising quantification and differential usage)
+# If not relevant leave as an empty string (i.e "")
+ref_extensions_string: "_ext"
+
 # Source of GTF file of reference transcripts ('annotation_gtf')
 # One of 'gencode' if GENCODE or "ensembl" for ENSEMBL other string
 # Used for Salmon index (for gene type filtering)
@@ -52,6 +56,10 @@ polya_site_atlas: tests/test_annotations/test_pas.bed
 # Whether to perform additional processing of BAM files prior to transcript assembly with StringTie
 # Put "none" for now. Other options possibly added in future...
 pre_stringtie_processing: "none"
+
+# Whether to run steps to identify novel last exons with a combination of StringTie, PolyASite and PAS motif searching
+# If False, pipeline jumps to generating a GTF of last exons from the reference input only
+run_identification: True
 
 # Whether to run differential usage analysis with SatuRn - bool
 # If False, pipeline terminates after generating matrices of summarised quantification for each 'last exon isoform'

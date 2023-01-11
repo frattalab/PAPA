@@ -431,7 +431,7 @@ rule get_combined_quant_gtf:
         output_prefix = os.path.join(TX_FILT_SUBDIR,
                                      "novel_ref_combined"),
         trust_ref_exon_number = "",
-        ref_extensions_string = "" if len(config["ref_gtf_extensions_string"]) == 0 else "--ref-extensions-string " + config["ref_extensions_string"]
+        ref_extensions_string = "" if len(config["ref_extensions_string"]) == 0 else "--ref-extensions-string " + config["ref_extensions_string"]
 
     conda:
         "../envs/papa.yaml"
@@ -478,7 +478,7 @@ rule get_ref_quant_gtf:
         output_prefix = os.path.join(TX_FILT_SUBDIR,
                                      "ref"),
         trust_ref_exon_number = "",
-        ref_extensions_string = "" if len(config["ref_gtf_extensions_string"]) == 0 else "--ref-extensions-string " + config["ref_extensions_string"]
+        ref_extensions_string = "" if len(config["ref_extensions_string"]) == 0 else "--ref-extensions-string " + config["ref_extensions_string"]
 
     conda:
         "../envs/papa.yaml"

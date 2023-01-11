@@ -4,7 +4,7 @@
 
 # Path to main (top-level) output directory storing results for this run
 #MUST END WITH SLASH
-main_output_dir: test_data_output/
+main_output_dir: test_data_output_skip_diff/
 
 # PATH to CSV sample table linking samples to corresponding BAM, FASTQ files etc.
 # 1 row per sample, 4 columns ('<column name>': <description>):
@@ -63,7 +63,7 @@ run_identification: True
 
 # Whether to run differential usage analysis with SatuRn - bool
 # If False, pipeline terminates after generating matrices of summarised quantification for each 'last exon isoform'
-run_differential: True
+run_differential: False
 
 
 ###

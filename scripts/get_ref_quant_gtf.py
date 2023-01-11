@@ -67,7 +67,7 @@ def annotate_le_ids_ref(ref_le: pr.PyRanges,ref_id_col="gene_id",le_id_outcol="l
             as_pyranges=False,
         )
 
-        n_ref_ext_ids = sum(len(ids_set) for ids_set in ref_ext_gene_ids.values())
+        n_ref_ext_ids = sum(len(ids_set) for ids_set in d_ref_ext_gene_ids.values())
         eprint(
             f"Number of genes containing extension events sourced from labelled annotated/reference transcripts - {n_ref_ext_ids}"
         )
@@ -204,7 +204,7 @@ def main(ref_gtf_path,
         )
         ref_le_ext.event_type = "last_exon_extension"
 
-        n_ref_ext = ref_le.event_type.loc[lambda x: x == "last_exon_extension"].sum()
+        n_ref_ext = ref_le_ext.event_type.loc[lambda x: x == "last_exon_extension"].sum()
 
         if n_ref_ext == 0:
             raise Exception(

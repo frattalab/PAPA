@@ -254,7 +254,7 @@ def update_ext_le_ids(
     gr = gr.apply(lambda df: df.sort_values(by=[id_col, number_col, "is_extension"]))
 
     # Adds column 'le_number_ext'
-    gr = gr.apply(lambda df: update_extension_le_number(df))
+    gr = gr.apply(lambda df: update_extension_le_number(df, id_col=id_col))
 
     # eprint(combined_ext[["ref_gene_id", "le_id", "le_number", "event_type", "is_extension", "le_number_ext"]].print(n=50))
 
@@ -583,6 +583,11 @@ def main(
         # Annotate as first, internal or last relative to tx
         ref_e = add_region_rank(ref_e)
         ref_le = get_terminal_regions(ref_e)
+        
+    # Also get a gr of non-last reference exons
+    ref_e_nl = pr.concat(
+        [get_terminal_regions(ref_e, which_region="first"), get_internal_regions(ref_e)]
+    )
 
     eprint("Extracting introns for each transcript in reference GTF...")
 
@@ -594,6 +599,11 @@ def main(
     ref_li = get_terminal_regions(
         ref_i, feature_key="intron", region_number_col="intron_number"
     )
+    
+    ref_i_nl = pr.concat(
+        [get_terminal_regions(ref_i, feature_key="intron", region_number_col="intron_number", which_region="first"),
+         get_internal_regions(ref_i, feature_key="intron", region_number_col="intron_number")]
+        )
 
     # Assign event types for reference LEs
     if ref_extensions_string is not None:
@@ -609,7 +619,7 @@ def main(
         )
         ref_le_ext.event_type = "last_exon_extension"
 
-        n_ref_ext = ref_le.event_type.loc[lambda x: x == "last_exon_extension"].sum()
+        n_ref_ext = ref_le_ext.event_type.loc[lambda x: x == "last_exon_extension"].sum()
 
         if n_ref_ext == 0:
             raise Exception(
@@ -630,7 +640,7 @@ def main(
 
         # Annotate as first/internal extensions if applicable, otherwise a distinct spliced last exon
         ref_le_n_ext = annotate_ref_event_types(
-            ref_le_n_ext, ref_li, ref_e, ref_i, remove_last_exon_extensions=True
+            ref_le_n_ext, ref_li, ref_e_nl, ref_i_nl
         )
 
         ref_le = pr.concat([ref_le_ext, ref_le_n_ext])
@@ -642,7 +652,7 @@ def main(
         ref_ext = False
 
         ref_le = annotate_ref_event_types(
-            ref_le, ref_li, ref_e, ref_i, remove_last_exon_extensions=True
+            ref_le, ref_li, ref_e_nl, ref_i_nl
         )
 
     eprint("Reading in input GTF of novel last exons...")
@@ -740,13 +750,6 @@ def main(
 
     eprint(
         "Extracting unique regions for last exons overlapping reference first/internal exons"
-    )
-    ref_e_nl = pr.concat(
-        [get_terminal_regions(ref_e, which_region="first"), get_internal_regions(ref_e)]
-    )
-
-    eprint(
-        "Generating 'unique regions' for last exons overlapping non-last reference exons..."
     )
 
     # Need to manually set strandedness to compare on same strand whilst awaiting clarification on behaviour

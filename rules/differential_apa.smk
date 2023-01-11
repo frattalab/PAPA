@@ -1,7 +1,7 @@
 rule tx_to_le_quant:
     input:
-        tx2le = rules.get_combined_quant_gtf.output.tx2le,
-        tx2gene = rules.get_combined_quant_gtf.output.tx2gene,
+        tx2le = rules.get_combined_quant_gtf.output.tx2le if config["run_identification"] else rules.get_ref_quant_gtf.output.tx2le,
+        tx2gene = rules.get_combined_quant_gtf.output.tx2gene if config["run_identification"] else rules.get_ref_quant_gtf.output.tx2gene,
         quant = expand(os.path.join(SALMON_SUBDIR,
                                     "quant",
                                     "{sample}",
@@ -54,7 +54,7 @@ rule tx_to_le_quant:
 rule saturn_apa:
     input:
         counts = rules.tx_to_le_quant.output.counts,
-        le2gene = rules.get_combined_quant_gtf.output.le2gene,
+        le2gene = rules.get_combined_quant_gtf.output.le2gene if config["run_identification"] else rules.get_ref_quant_gtf.output.le2gene,
         sample_tbl = config["sample_tbl"]
 
     output:
@@ -100,7 +100,7 @@ rule saturn_apa:
 rule process_saturn_tbl:
     input:
         saturn_tbl = rules.saturn_apa.output.saturn_tbl,
-        info_tbl = rules.get_combined_quant_gtf.output.info_tbl,
+        info_tbl = rules.get_combined_quant_gtf.output.info_tbl if config["run_identification"] else rules.get_ref_quant_gtf.output.info_tbl,
         ppau = rules.tx_to_le_quant.output.ppau
     
     output:

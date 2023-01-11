@@ -255,6 +255,12 @@ def add_3p_extension_length(gr,
                      how=None,
                      suffix=suffix,
                      nb_cpu=nb_cpu)
+    
+    eprint(f"number of ovrlaps between input last exons & reference last exons -{len(joined)}")
+    
+    if len(joined) == 0:
+        eprint("No overlaps found between input last exons and reference last exons - returning empty PyRanges object")
+        return pr.PyRanges()
 
     joined = joined.assign(out_col,
                            lambda df: df["End"] - df["End" + suffix] if (df["Strand"] == "+").all() else
@@ -379,6 +385,15 @@ def find_extension_events(novel_le,
     # 1 length per le returned (smallest)
     # Events with no overlap with ref exons are dropped 
     novel_le_ext = add_3p_extension_length(novel_le, ref_exons, suffix=suffix)
+    
+    if len(novel_le_ext) == 0:
+        eprint("No 3' extensions of reference exons of any length found - returning empty pr.PyRanges")
+        
+        if return_filtered_ids:
+            return pr.PyRanges(), set(), set()
+        
+        else:
+            return pr.PyRanges()
 
     # Remove any negative/0 distances (i.e. its 3'end is internal/identical to at least one annotated exon)
     # Note: don't want to track these as could still be a valid spliced isoform (and is never an extension to begin with)
