@@ -34,7 +34,7 @@ tx_fcs
 
 # Set the first and last novel txipts to have a FC of 4
 # Set the  transcript of ref_g3 to have a FC of 4
-# Set the first ref & '_ext' transcript of ref_g3 to have no expression in CTLS, FC of 4 in KD
+# Set the first ref & '_ext' transcript of ref_g3 FC of 5 & 10 in KD respectively
 tx_p <- grep("^nov_g.*_p$", row.names(tx_fcs))
 tx_up1 <- row.names(tx_fcs)[tx_p[1]]
 tx_up2 <- row.names(tx_fcs)[tx_p[length(tx_p)]]
@@ -46,8 +46,8 @@ ref_trs_up <- c("ref_g3_tr_1", "ref_g3_tr_5_ext")
 tx_fcs[c(tx_up1, tx_up2), "kd"] <- 4
 tx_fcs
 
-tx_fcs[ref_trs_up, "ctl" ] <- 0.1
-tx_fcs[ref_trs_up, "kd"] <- 4
+tx_fcs[ref_trs_up[1], "kd" ] <- 5
+tx_fcs[ref_trs_up[2], "kd"] <- 10
 tx_fcs
 
 # 100 bp reads, PE, stranded, 20x coverage
