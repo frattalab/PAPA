@@ -418,27 +418,27 @@ def annotate_ref_event_types(
     _type_
         _description_
     '''
-    
+
     def_rank_col = "region_rank"
-    
+
     # must be present otherwise event type definition fails
     assert def_rank_col in ref_nl_exons.columns
     if def_rank_col in le.columns:
         rank_col_exons = def_rank_col + suffix # will be suffixed when join rows
     else:
         rank_col_exons = def_rank_col
-        
+
     assert def_rank_col in ref_nl_introns.columns
     if def_rank_col in li.columns:
         rank_col_introns = def_rank_col + suffix # will be suffixed when join rows
     else:
         rank_col_introns = def_rank_col
-        
+
     # First, check that 3'ends of last exons do not overlap with first/internal exons
     # (Note: these would be removed downstream anyway)
     no_nl_exon_overlap_ids = no_overlap_3p_ids(le, ref_nl_exons)
     eprint(f"Number of last exons without 3'ends internal to first/internal exons - {len(no_nl_exon_overlap_ids)}")
-    
+
     le = le.subset(lambda df: df["transcript_id"].isin(no_nl_exon_overlap_ids))
     li = li.subset(lambda df: df["transcript_id"].isin(no_nl_exon_overlap_ids))
 
@@ -469,15 +469,15 @@ def annotate_ref_event_types(
     spliced_nl = find_spliced_events(
         li_n_ext, ref_nl_introns, tolerance_filter=True, rank_col=rank_col_introns
     )  # will check for 5'ss matches as just reporting alt SJs for ref le (prevents overloading)
-    
+
     # Everything else remaining will be 'last exon spliced'
     # Want to keep same metadata as first/internal, so will re-run against self
     li_n_ext_les = li_n_ext.subset(lambda df: ~df["transcript_id"].isin(set(spliced_nl.transcript_id)))
-    
+
     spliced_l = find_spliced_events(
         li_n_ext_les, li_n_ext_les, tolerance_filter=True, rank_col=rank_col_introns
-    ) 
-    
+    )
+
     spliced = pr.concat([spliced_nl, spliced_l])
 
     # Spliced is last introns, want corresponding last exons in output
@@ -583,7 +583,7 @@ def main(
         # Annotate as first, internal or last relative to tx
         ref_e = add_region_rank(ref_e)
         ref_le = get_terminal_regions(ref_e)
-        
+
     # Also get a gr of non-last reference exons
     ref_e_nl = pr.concat(
         [get_terminal_regions(ref_e, which_region="first"), get_internal_regions(ref_e)]
@@ -599,7 +599,7 @@ def main(
     ref_li = get_terminal_regions(
         ref_i, feature_key="intron", region_number_col="intron_number"
     )
-    
+
     ref_i_nl = pr.concat(
         [get_terminal_regions(ref_i, feature_key="intron", region_number_col="intron_number", which_region="first"),
          get_internal_regions(ref_i, feature_key="intron", region_number_col="intron_number")]
@@ -619,12 +619,12 @@ def main(
         )
         ref_le_ext.event_type = "last_exon_extension"
 
-        n_ref_ext = ref_le_ext.event_type.loc[lambda x: x == "last_exon_extension"].sum()
-
-        if n_ref_ext == 0:
+        if len(ref_le_ext) == 0:
             raise Exception(
                 f"No reference transcript_id containing provided string - {ref_extensions_string} - were found. Correct or do not pass --ref-extensions-string to avoid this error message"
             )
+
+        n_ref_ext = ref_le_ext.event_type.loc[lambda x: x == "last_exon_extension"].sum()
 
         eprint(
             f"Number of reference transcript ids containing extensions string - {n_ref_ext}"
