@@ -20,3 +20,4 @@ tests/test_aligned/fastp_trimmed/*
 tests/test_aligned/logs/*
 tests/test_aligned/qc/*
 tests/test_aligned/salmon_quant/*
+debug*
