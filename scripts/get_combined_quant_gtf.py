@@ -674,11 +674,13 @@ def main(
 
     # Make sure gene_id_ref has a single value string if only 1 distinct gene ID (Otherwise collapse to non-redundant comma-separated string of gene IDs)
     # TODO: looping over Series is a dirty way to do this, find a more canonical approach
+    # TODO: why do some last exons have NaNs for gene_id_ref?
+
     novel_le = novel_le.assign(
         "gene_id_ref",
         lambda df: pd.Series(
             [
-                ",".join(list(dict.fromkeys(ref_id.split(","))))
+                ",".join(list(dict.fromkeys(str(ref_id).split(",")))) # convert to string in case of NaNs
                 for ref_id in df["gene_id_ref"]
             ]
         ),
