@@ -31,6 +31,18 @@ BMARK_SUBDIR = os.path.join(OUTPUT_DIR, config["benchmarks_subdir_name"], "")
 DAPA_SUBDIR = os.path.join(OUTPUT_DIR, config["diff_apa_subdir_name"], "")
 
 
+## Double check switches for workflow control are valid
+
+# First check all are True/False booleans
+assert isinstance(config["run_identification"], bool), f"'run_identification' must be True/False boolean, {config['run_identification']} (type {type(config['run_identification'])}) was provided"
+assert isinstance(config["run_differential"], bool), f"'run_differential' must be True/False boolean, {config['run_differential']} (type {type(config['run_differential'])}) was provided"
+assert isinstance(config["filter_ref_gtf"], bool), f"'filter_ref_gtf' must be True/False boolean, {config['filter_ref_gtf']} (type {type(config['filter_ref_gtf'])}) was provided"
+assert isinstance(config["use_provided_novel_les"], bool), f"'use_provided_novel_les' must be True/False boolean, {config['use_provided_novel_les']} (type {type(config['use_provided_novel_les'])}) was provided"
+
+# Now double check that valid combination of use_provided_novel_les & run_identification is provided (if applicable)
+if config["use_provided_novel_les"]:
+    assert config["use_provided_novel_les"] and config["run_identification"], f"'use_provided_novel_les' is set to True but 'run_identification' is not. To continue using input novel last exons please set 'run_identification' to True"
+
 include: "rules/filter_gtf.smk"
 include: "rules/stringtie.smk"
 include: "rules/tx_filtering.smk"

@@ -30,9 +30,16 @@ strandedness: "--fr"
 # - Quantify reference transcripts with Salmon
 annotation_gtf: tests/test_annotations/test_transcripts_reference.gtf
 
+# Optional GTF containing additional last exons to combine with reference GTF for quantification
+# e.g. combined PAPA output last exons from multiple datasets
+# Note this must have 'event_type', 'gene_id', 'transcript_id' annotations (i.e. conform to output of combine_novel_last_exons.py/ output of run_identification for a single dataset)
+# See docs for more details
+# Path to novel last exon GTF (can be left as empty string if not using this)
+input_novel_gtf: "tests/test_annotations/test_empty_novel_les.gtf"
+
 # Reference GTF - treat 'transcript_id' values containing this string as if a novel extension (i.e. will be considered as a distinct isoform for summarising quantification and differential usage)
-# If not relevant leave as an empty string (i.e "")
-ref_extensions_string: "_ext"
+# If not relevant leave as an empty string (i.e "") otherwise pipeline will raise an exception if not found in annotation_gtf
+ref_extensions_string: ""
 
 # Source of GTF file of reference transcripts ('annotation_gtf')
 # One of 'gencode' if GENCODE or "ensembl" for ENSEMBL other string
@@ -64,6 +71,10 @@ run_identification: True
 # Whether to run differential usage analysis with SatuRn - bool
 # If False, pipeline terminates after generating matrices of summarised quantification for each 'last exon isoform'
 run_differential: True
+
+# Whether to use provided novel last exons (input_novel_gtf) as novel events to combine with reference GTF
+# Note: if set to True, input_novel_gtf must be a valid path and run_identification must also be set to True (this is a 'plumbing' workaround, identification of novel last exons from input data is not performed)
+use_provided_novel_les: False
 
 
 ###

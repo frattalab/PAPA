@@ -413,7 +413,7 @@ rule get_combined_quant_gtf:
     Extract unique regions for last exons overlapping first/internal reference exons
     '''
     input:
-        novel_gtf = rules.combine_novel_filtered_by_condition.output.gtf,
+        novel_gtf = rules.combine_novel_filtered_by_condition.output.gtf if not config["use_provided_novel_les"] else config["input_novel_gtf"],
         ref_gtf = rules.filter_ref_gtf.output if config["filter_ref_gtf"] else GTF
 
     output:
