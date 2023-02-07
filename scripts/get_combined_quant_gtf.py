@@ -624,7 +624,7 @@ def main(
                 f"No reference transcript_id containing provided string - {ref_extensions_string} - were found. Correct or do not pass --ref-extensions-string to avoid this error message"
             )
 
-        n_ref_ext = ref_le_ext.event_type.loc[lambda x: x == "last_exon_extension"].sum()
+        n_ref_ext = ref_le_ext.event_type.loc[lambda x: x == "last_exon_extension"].size
 
         eprint(
             f"Number of reference transcript ids containing extensions string - {n_ref_ext}"

@@ -55,7 +55,7 @@ def annotate_le_ids_ref(ref_le: pr.PyRanges,ref_id_col="gene_id",le_id_outcol="l
     ref_extensions : bool, optional
         _description_, by default False
     '''
-    
+
     if ref_extensions:
         # Want to also consider specific reference events as if novel extensions
         # Will handle these genes separately
@@ -71,14 +71,14 @@ def annotate_le_ids_ref(ref_le: pr.PyRanges,ref_id_col="gene_id",le_id_outcol="l
         eprint(
             f"Number of genes containing extension events sourced from labelled annotated/reference transcripts - {n_ref_ext_ids}"
         )
-        
+
         # Combine into a single set
         # https://blog.finxter.com/union-multiple-sets-in-python/
         ref_ext_gene_ids = set().union(*d_ref_ext_gene_ids.values())
-        
+
     else:
         ref_ext_gene_ids = set()
-    
+
     if len(ref_ext_gene_ids) == 0:
         # no extensions in ref GTF to treat as separate events
         # Assign 5'-3' 1..n 'last_exon number' for each gene
@@ -88,36 +88,36 @@ def annotate_le_ids_ref(ref_le: pr.PyRanges,ref_id_col="gene_id",le_id_outcol="l
         ref_le_n_ext = pr.PyRanges()
         ref_le_ext = ref_le_ext.cluster(by=ref_id_col, strand=None)
         ref_le_ext = cluster_to_region_number(ref_le_ext, ref_id_col)
-        
+
         eprint("assigning 'le_id' (last exon ID) for each gene...")
 
         ref_le_ext = ref_le_ext.assign(le_id_outcol,
                                lambda df: df[ref_id_col] + "_" + df["le_number"].astype(int).astype(str),
                     )
-        
-        
-    
+
+
+
     else:
         # Need to assign le_ids for genes with/without extensions separately
         ref_le_ext = ref_le.subset(lambda df: df[ref_id_col].isin(ref_ext_gene_ids))
         ref_le_n_ext = ref_le.subset(lambda df: ~(df[ref_id_col].isin(ref_ext_gene_ids)))
-        
-    
+
+
         ref_le_n_ext = ref_le_n_ext.cluster(by=ref_id_col, strand=None)
         ref_le_n_ext = cluster_to_region_number(ref_le_n_ext, ref_id_col)
-    
+
         ref_le_ext = ref_le_ext.cluster(by=ref_id_col, strand=None)
         ref_le_ext = cluster_to_region_number(ref_le_ext, ref_id_col)
-        
+
         eprint("assigning 'le_id' (last exon ID) for each gene...")
         ref_le_n_ext = ref_le_n_ext.assign(le_id_outcol,
                                lambda df: df[ref_id_col] + "_" + df["le_number"].astype(int).astype(str),
                             )
-    
+
         ref_le_ext = ref_le_ext.assign(le_id_outcol,
                                        lambda df: df[ref_id_col] + "_" + df["le_number"].astype(int).astype(str)
     )
-    
+
         # Extension events - need to update le number so extension = own event (for last_extensions)
         ref_le_ext = update_ext_le_ids(ref_le_ext,
                                        type_col="event_type",
@@ -125,12 +125,12 @@ def annotate_le_ids_ref(ref_le: pr.PyRanges,ref_id_col="gene_id",le_id_outcol="l
                                        id_col=ref_id_col,
                                        le_id_col=le_id_outcol
                                        )
-    
-    
+
+
     out = pr.concat([ref_le_ext, ref_le_n_ext])
-    
+
     return out
-    
+
 
 def main(ref_gtf_path,
          ref_attr_key_order,
@@ -167,12 +167,12 @@ def main(ref_gtf_path,
         # Annotate as first, internal or last relative to tx
         ref_e = add_region_rank(ref_e)
         ref_le = get_terminal_regions(ref_e)
-    
+
     # Also get a gr of non-last reference exons
     ref_e_nl = pr.concat(
         [get_terminal_regions(ref_e, which_region="first"), get_internal_regions(ref_e)]
     )
-    
+
     eprint("Extracting introns for each transcript in reference GTF...")
 
     ref_i = ref.features.introns(by="transcript")
@@ -183,12 +183,12 @@ def main(ref_gtf_path,
     ref_li = get_terminal_regions(
         ref_i, feature_key="intron", region_number_col="intron_number"
     )
-    
+
     ref_i_nl = pr.concat(
         [get_terminal_regions(ref_i, feature_key="intron", region_number_col="intron_number", which_region="first"),
          get_internal_regions(ref_i, feature_key="intron", region_number_col="intron_number")]
         )
-    
+
 
     # Assign event types for reference LEs
     if ref_extensions_string is not None:
@@ -204,7 +204,7 @@ def main(ref_gtf_path,
         )
         ref_le_ext.event_type = "last_exon_extension"
 
-        n_ref_ext = ref_le_ext.event_type.loc[lambda x: x == "last_exon_extension"].sum()
+        n_ref_ext = ref_le_ext.event_type.loc[lambda x: x == "last_exon_extension"].size
 
         if n_ref_ext == 0:
             raise Exception(
@@ -240,13 +240,13 @@ def main(ref_gtf_path,
         ref_le = annotate_ref_event_types(
             ref_le, ref_li, ref_e_nl, ref_i_nl,
         )
-        
+
     # Add an identifier grouping overlapping last exons together
     ref_le = annotate_le_ids_ref(ref_le, ref_extensions=ref_ext)
-    
-    # Want a GTF containing 'unique regions' of last exons 
+
+    # Want a GTF containing 'unique regions' of last exons
     # These regions will be used for quantification (don't want to assign expression in shared region only to the last exon (internal exons aren't included))
-    
+
     eprint(
         "Extracting unique regions for last exons overlapping reference first/internal exons"
     )
@@ -265,7 +265,7 @@ def main(ref_gtf_path,
     eprint(
         f"Number of last exon IDs dropped due to complete containment inside ref overlapping exons - {len(le_ids_dropped)}"
     )
-    
+
     eprint("Generating tx2le, le2gene assignment tables...")
 
     eprint(
@@ -373,7 +373,7 @@ def main(ref_gtf_path,
         )  # remove LEs completely contained within known exons
         .to_gtf(output_prefix + ".last_exons.gtf")
     )
-    
+
 if __name__ == "__main__":
 
     start = timer()
