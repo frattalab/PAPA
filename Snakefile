@@ -14,6 +14,9 @@ if sample_tbl['fastq2'].isna().all():
 else:
     single_end = False
 
+# Now double check that sample_name fields do not contain hyphens ('-') - will break column selection with R
+if sample_tbl.index.str.contains("-", regex=False).any():
+    raise Exception(f"Values in 'sample_name' column of sample table must not contain hyphen characters ('-')")
 
 SAMPLES = sample_tbl.index.tolist()
 CONDITIONS = sample_tbl["condition"].drop_duplicates().tolist()
