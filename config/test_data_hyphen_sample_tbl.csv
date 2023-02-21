@@ -1,0 +1,8 @@
+sample_name,condition,path,fastq1,fastq2
+group1_sample_01,group1,tests/test_aligned/STAR_aligned/group1_sample_01.Aligned.sorted.out.bam,tests/test_sequence/group1_sample_01_1.fastq.gz,tests/test_sequence/group1_sample_01_2.fastq.gz
+group1_sample_02,group1,tests/test_aligned/STAR_aligned/group1_sample_02.Aligned.sorted.out.bam,tests/test_sequence/group1_sample_02_1.fastq.gz,tests/test_sequence/group1_sample_02_2.fastq.gz
+group1_sample_03,group1,tests/test_aligned/STAR_aligned/group1_sample_03.Aligned.sorted.out.bam,tests/test_sequence/group1_sample_03_1.fastq.gz,tests/test_sequence/group1_sample_03_2.fastq.gz
+group2_sample_04,group2,tests/test_aligned/STAR_aligned/group2_sample_04.Aligned.sorted.out.bam,tests/test_sequence/group2_sample_04_1.fastq.gz,tests/test_sequence/group2_sample_04_2.fastq.gz
+group2_sample_05,group2,tests/test_aligned/STAR_aligned/group2_sample_05.Aligned.sorted.out.bam,tests/test_sequence/group2_sample_05_1.fastq.gz,tests/test_sequence/group2_sample_05_2.fastq.gz
+group2_sample_06,group2,tests/test_aligned/STAR_aligned/group2_sample_06.Aligned.sorted.out.bam,tests/test_sequence/group2_sample_06_1.fastq.gz,tests/test_sequence/group2_sample_06_2.fastq.gz
+group2-sample_06,group2,tests/test_aligned/STAR_aligned/group2_sample_06.Aligned.sorted.out.bam,tests/test_sequence/group2_sample_06_1.fastq.gz,tests/test_sequence/group2_sample_06_2.fastq.gz

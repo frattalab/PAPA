@@ -8,7 +8,7 @@ main_output_dir: test_data_output/
 
 # PATH to CSV sample table linking samples to corresponding BAM, FASTQ files etc.
 # 1 row per sample, 4 columns ('<column name>': <description>):
-# 'sample_name': unique identifier for sample
+# 'sample_name': unique identifier for sample. Must not contain hyphen characters (i.e. '-')
 # 'condition': key to group samples of the same condition of interest (e.g. ‘control’ or ‘knockdown’)
 # 'path': path to BAM file containing aligned reads for given sample. BAM files should be coordinate sorted and have a corresponding BAI index file at the same location (suffixed with ‘.bai’)
 # 'fastq1`': path to FASTQ file storing 1st mates of read pairs aligned for same sample
