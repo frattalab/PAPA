@@ -270,6 +270,10 @@ salmon_quant_threads: 2
 
 salmon_kmer_size: 31
 
+# additional command line arguments to pass to salmon quant. This should be a list of exact strings of command line flags
+# to pass no additional flags, simply provide a list with an empty string (e.g. [""])
+salmon_quant_extra_params: ["--gcBias", "--seqBias"]
+
 #####-----------------------------------------
 ### DIFFERENTIAL USAGE OPTIONS/PARAMETERS
 #####-----------------------------------------

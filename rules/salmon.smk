@@ -132,6 +132,7 @@ rule salmon_quant_pe:
     params:
         index_dir = os.path.join(SALMON_SUBDIR, "index",),
         output_dir = os.path.join(SALMON_SUBDIR, "quant", "{sample}"),
+        extra_params = " ".join(config["salmon_quant_extra_params"]),
         libtype = "A"
 
     threads:
@@ -159,9 +160,7 @@ rule salmon_quant_pe:
         --mates2 {input.fast2} \
         --threads {threads} \
         -o {params.output_dir} \
-        --seqBias \
-        --posBias \
-        --gcBias \
+        {params.extra_params} \
         &> {log}
         """
 
@@ -177,6 +176,7 @@ rule salmon_quant_se:
     params:
         index_dir = os.path.join(SALMON_SUBDIR, "index",),
         output_dir = os.path.join(SALMON_SUBDIR, "quant", "{sample}"),
+        extra_params = " ".join(config["salmon_quant_extra_params"]),
         libtype = "A"
 
     threads:
@@ -203,9 +203,6 @@ rule salmon_quant_se:
         -r {input.fast1} \
         --threads {threads} \
         -o {params.output_dir} \
-        --seqBias \
-        --posBias \
-        --gcBias \
+        {params.extra_params} \
         &> {log}
         """
-
