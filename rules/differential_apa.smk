@@ -1,7 +1,57 @@
+def id2id_target(run_identification: bool, use_precomputed_salmon_index: bool, tx2id: str):
+    '''
+    Helper function to return path to id2id table/info table given flags to control workflow specification
+    '''
+
+    assert tx2id in ["tx2le", "tx2gene", "le2gene", "info_tbl"]
+
+    if use_precomputed_salmon_index:
+        # no matter what run_id value is, want to use precomputed index (and therefore precomputed GTF annotation, tx2id etc.)
+        if tx2id == "tx2le":
+            return config["precomputed_tx2le"]
+        
+        elif tx2id == "tx2gene":
+            return config["precomputed_tx2gene"]
+        
+        elif tx2id == "le2gene":
+            return config["precomputed_le2gene"]
+        
+        else:
+            return config["precomputed_info_tbl"]
+
+    elif run_identification:
+        # use output of get_combined_quant_gtf
+        if tx2id == "tx2le":
+            return rules.get_combined_quant_gtf.output.tx2le
+        
+        elif tx2id == "tx2gene":
+            return rules.get_combined_quant_gtf.output.tx2gene
+        
+        elif tx2id == "le2gene":
+            return rules.get_combined_quant_gtf.output.le2gene
+        
+        else:
+            return rules.get_combined_quant_gtf.output.info_tbl
+    
+    else:
+        # use output of get_ref_quant_gtf (i.e. reference/input GTF only quantified)
+        if tx2id == "tx2le":
+            return rules.get_ref_quant_gtf.output.tx2le
+        
+        elif tx2id == "tx2gene":
+            return rules.get_ref_quant_gtf.output.tx2gene
+        
+        elif tx2id == "le2gene":
+            return rules.get_ref_quant_gtf.output.le2gene
+        
+        else:
+            return rules.get_ref_quant_gtf.output.info_tbl
+
+
 rule tx_to_le_quant:
     input:
-        tx2le = rules.get_combined_quant_gtf.output.tx2le if config["run_identification"] else rules.get_ref_quant_gtf.output.tx2le,
-        tx2gene = rules.get_combined_quant_gtf.output.tx2gene if config["run_identification"] else rules.get_ref_quant_gtf.output.tx2gene,
+        tx2le = id2id_target(config["run_identification"], config["use_precomputed_salmon_index"], "tx2le"),
+        tx2gene = id2id_target(config["run_identification"], config["use_precomputed_salmon_index"], "tx2gene"),
         quant = expand(os.path.join(SALMON_SUBDIR,
                                     "quant",
                                     "{sample}",
@@ -54,7 +104,7 @@ rule tx_to_le_quant:
 rule saturn_apa:
     input:
         counts = rules.tx_to_le_quant.output.counts,
-        le2gene = rules.get_combined_quant_gtf.output.le2gene if config["run_identification"] else rules.get_ref_quant_gtf.output.le2gene,
+        le2gene =  id2id_target(config["run_identification"], config["use_precomputed_salmon_index"], "le2gene"),
         sample_tbl = config["sample_tbl"]
 
     output:
@@ -100,7 +150,7 @@ rule saturn_apa:
 rule process_saturn_tbl:
     input:
         saturn_tbl = rules.saturn_apa.output.saturn_tbl,
-        info_tbl = rules.get_combined_quant_gtf.output.info_tbl if config["run_identification"] else rules.get_ref_quant_gtf.output.info_tbl,
+        info_tbl = id2id_target(config["run_identification"], config["use_precomputed_salmon_index"], "info_tbl"),
         ppau = rules.tx_to_le_quant.output.ppau
     
     output:

@@ -41,10 +41,16 @@ assert isinstance(config["run_identification"], bool), f"'run_identification' mu
 assert isinstance(config["run_differential"], bool), f"'run_differential' must be True/False boolean, {config['run_differential']} (type {type(config['run_differential'])}) was provided"
 assert isinstance(config["filter_ref_gtf"], bool), f"'filter_ref_gtf' must be True/False boolean, {config['filter_ref_gtf']} (type {type(config['filter_ref_gtf'])}) was provided"
 assert isinstance(config["use_provided_novel_les"], bool), f"'use_provided_novel_les' must be True/False boolean, {config['use_provided_novel_les']} (type {type(config['use_provided_novel_les'])}) was provided"
+assert isinstance(config["use_precomputed_salmon_index"], bool), f"'use_precomputed_salmon_index' must be True/False boolean, {config['use_precomputed_salmon_index']} (type {type(config['use_precomputed_salmon_index'])}) was provided"
 
 # Now double check that valid combination of use_provided_novel_les & run_identification is provided (if applicable)
 if config["use_provided_novel_les"]:
     assert config["use_provided_novel_les"] and config["run_identification"], f"'use_provided_novel_les' is set to True but 'run_identification' is not. To continue using input novel last exons please set 'run_identification' to True"
+
+# make a note if run_identification & use_precomputed_salmon_index are both True - run_id will be overrided and provided files used
+if config["run_identification"] and config["use_precomputed_salmon_index"]:
+    sys.stderr.write("run_identification will be overridden and pre-provided salmon index, id and info tables will be used\n")
+
 
 include: "rules/filter_gtf.smk"
 include: "rules/stringtie.smk"

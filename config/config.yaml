@@ -76,6 +76,11 @@ run_differential: True
 # Note: if set to True, input_novel_gtf must be a valid path and run_identification must also be set to True (this is a 'plumbing' workaround, identification of novel last exons from input data is not performed)
 use_provided_novel_les: False
 
+# Whether to use pre-computed salmon index to quantify samples. Useful if wish to quantify multiple datasets with a common annotation and wish to save on unnecessary computation
+# Note: If set to True, run_identification will be overriden
+# Note: You will also need to provide the tx2le, tx2gene, le2gene and 'info' tables produced for the same run.
+use_precomputed_salmon_index: True
+
 
 ###
 # Reference GTF filtering
@@ -274,9 +279,28 @@ salmon_kmer_size: 31
 # to pass no additional flags, simply provide a list with an empty string (e.g. [""])
 salmon_quant_extra_params: ["--gcBias", "--seqBias"]
 
+# Path to directory containing pre-computed salmon index
+# Note: only used if use_precomputed_salmon_index is set to True
+precomputed_salmon_index: "tests/dryruns/salmon_index/"
+
 #####-----------------------------------------
 ### DIFFERENTIAL USAGE OPTIONS/PARAMETERS
 #####-----------------------------------------
+
+# NOTE: the following parameters (up until next NOTE) are ignored is use_precomputed_salmon_index is set to False
+
+# Path to precomputed '<dir>/novel_ref_combined.tx2le.tsv'. Must be from the same run that generated precomputed salmon index
+precomputed_tx2le: "tests/dryruns/novel_ref_combined.tx2le.tsv"
+
+# Path to precomputed '<dir>/novel_ref_combined.tx2gene.tsv'. Must be from the same run that generated precomputed salmon index
+precomputed_tx2gene: "tests/dryruns/novel_ref_combined.tx2gene.tsv"
+
+# Path to precomputed '<dir>/novel_ref_combined.le2gene.tsv'. Must be from the same run that generated precomputed salmon index
+precomputed_le2gene: "tests/dryruns/novel_ref_combined.le2gene.tsv"
+
+# Path to precomputed '<dir>/novel_ref_combined.info.tsv'. Must be from the same run that generated precomputed salmon index
+precomputed_info_tbl: "tests/dryruns/novel_ref_combined.info.tsv"
+
 
 # NOTE: all following parameters are ignored if 'run_differential' is set to False
 
