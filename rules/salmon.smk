@@ -130,7 +130,7 @@ rule salmon_quant_pe:
         os.path.join(SALMON_SUBDIR, "quant", "{sample}", "quant.sf")
 
     params:
-        index_dir = os.path.join(SALMON_SUBDIR, "index",),
+        index_dir = os.path.join(SALMON_SUBDIR, "index",) if not config["use_precomputed_salmon_index"] else config["precomputed_salmon_index"],
         output_dir = os.path.join(SALMON_SUBDIR, "quant", "{sample}"),
         extra_params = " ".join(config["salmon_quant_extra_params"]),
         libtype = "A"
@@ -174,7 +174,7 @@ rule salmon_quant_se:
         os.path.join(SALMON_SUBDIR, "quant", "{sample}", "quant.sf")
 
     params:
-        index_dir = os.path.join(SALMON_SUBDIR, "index",),
+        index_dir = os.path.join(SALMON_SUBDIR, "index",) if not config["use_precomputed_salmon_index"] else config["precomputed_salmon_index"],
         output_dir = os.path.join(SALMON_SUBDIR, "quant", "{sample}"),
         extra_params = " ".join(config["salmon_quant_extra_params"]),
         libtype = "A"
