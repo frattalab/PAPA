@@ -101,6 +101,116 @@ rule tx_to_le_quant:
         """
 
 
+rule make_formulas_txt:
+    output:
+        os.path.join(DAPA_SUBDIR, "formulas.txt")
+    
+    params:
+        full = config["dexseq_formula_full"],
+        reduced = config["dexseq_formula_reduced"]
+    
+    run:
+        with open(output[0], "w") as outfile:
+            outfile.write(params.full + "\n")
+            outfile.write(params.reduced + "\n")
+
+
+rule dexseq_apa:
+    input:
+        counts = rules.tx_to_le_quant.output.counts,
+        le2gene =  id2id_target(config["run_identification"], config["use_precomputed_salmon_index"], "le2gene"),
+        sample_tbl = config["sample_tbl"],
+        formulas = rules.make_formulas_txt.output
+
+    output:
+        os.path.join(DAPA_SUBDIR, "dexseq_apa.results.tsv")
+
+    params:
+        script = os.path.join("scripts", "run_dexseq.R"),
+        output_prefix = os.path.join(DAPA_SUBDIR, "dexseq_apa"),
+        min_mean_count = config["min_mean_count"],
+        min_rel_usage = config["min_relative_usage"],
+        contrast_name = CONTRAST_NAME,
+        base_key = BASE_KEY,
+        contrast_key = CONTRAST_KEY,
+        condition_col = "condition" # set by pipeline
+
+    log:
+        stdout = os.path.join(LOG_SUBDIR,
+                     config["diff_apa_subdir_name"],
+                     "dexseq_apa.stdout.log"),
+        stderr = os.path.join(LOG_SUBDIR,
+                     config["diff_apa_subdir_name"],
+                     "dexseq_apa.stderr.log"),
+
+    benchmark:
+        os.path.join(BMARK_SUBDIR,
+                     config["diff_apa_subdir_name"],
+                     "dexseq_apa.txt")
+
+    threads:
+        config["dexseq_threads"]
+
+    conda:
+        "../envs/papa_r.yaml"
+
+    shell:
+        """
+        Rscript {params.script} \
+        -i {input.counts} \
+        -g {input.le2gene} \
+        -s {input.sample_tbl} \
+        --formulas {input.formulas} \
+        --base-key {params.base_key} \
+        --contrast-key {params.contrast_key} \
+        -n {params.contrast_name} \
+        --condition-col {params.condition_col} \
+        -m {params.min_mean_count} \
+        -r {params.min_rel_usage} \
+        -c {threads} \
+        -o {params.output_prefix} \
+        > {log.stdout} \
+        2> {log.stderr}
+        """
+
+
+rule process_dexseq_tbl:
+    input:
+        dexseq_tbl = rules.dexseq_apa.output,
+        info_tbl = id2id_target(config["run_identification"], config["use_precomputed_salmon_index"], "info_tbl"),
+        ppau = rules.tx_to_le_quant.output.ppau
+
+    output:
+        os.path.join(DAPA_SUBDIR, "dexseq_apa.results.processed.tsv")
+
+    params:
+        script = os.path.join("scripts", "process_dexseq_tbl.R"),
+        output_prefix = os.path.join(DAPA_SUBDIR, "dexseq_apa.results")
+
+    log:
+        stdout = os.path.join(LOG_SUBDIR, config["diff_apa_subdir_name"], "process_dexseq_tbl.stdout.log"),
+        stderr = os.path.join(LOG_SUBDIR, config["diff_apa_subdir_name"], "process_dexseq_tbl.stderr.log")
+
+    benchmark:
+        os.path.join(BMARK_SUBDIR,
+                     config["diff_apa_subdir_name"],
+                     "process_dexseq_tbl.txt")
+
+    conda:
+        "../envs/papa_r.yaml"
+
+    shell:
+        """
+        Rscript {params.script} \
+        -i {input.dexseq_tbl} \
+        -a {input.info_tbl} \
+        -p {input.ppau} \
+        -o {params.output_prefix} \
+        > {log.stdout} \
+        2> {log.stderr}
+        """
+
+
 rule saturn_apa:
     input:
         counts = rules.tx_to_le_quant.output.counts,

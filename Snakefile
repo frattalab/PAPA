@@ -52,6 +52,18 @@ if config["run_identification"] and config["use_precomputed_salmon_index"]:
     sys.stderr.write("run_identification will be overridden and pre-provided salmon index, id and info tables will be used\n")
 
 
+# If differential, make sure that sample table only has two conditions & to set a contrast name
+if config["run_differential"]:
+    assert sample_tbl["condition"].nunique() == 2, f"condition column in sample table must only contain two distinct conditions, following n found - {sample_tbl['condition'].nunique()}"
+    # firs key in sample table condition column = base_key
+    BASE_KEY = sample_tbl["condition"][0]
+    CONTRAST_KEY = sample_tbl.loc[sample_tbl["condition"] != BASE_KEY, "condition"][0]
+    CONTRAST_NAME = CONTRAST_KEY + "vs" + BASE_KEY
+    sys.stderr.write(f"Inferred base key for condition - {BASE_KEY}\n")
+    sys.stderr.write(f"Inferred contrast key for condition - {CONTRAST_KEY}\n")
+    sys.stderr.write(f"Constructed contrast name - {CONTRAST_NAME}\n")
+
+
 include: "rules/filter_gtf.smk"
 include: "rules/stringtie.smk"
 include: "rules/tx_filtering.smk"
@@ -60,7 +72,7 @@ include: "rules/differential_apa.smk"
 
 # sys.stderr.write(OPTIONS + "\n")
 
-localrules: all, gtf_list_by_condition, gtf_list_all_tpm_filtered, check_per_sample_mean_tpm_filtered
+localrules: all, gtf_list_by_condition, gtf_list_all_tpm_filtered, check_per_sample_mean_tpm_filtered, make_formulas_txt
 
 wildcard_constraints:
     sample = "|".join(SAMPLES),
@@ -68,7 +80,7 @@ wildcard_constraints:
 
 rule all:
     input:
-        rules.process_saturn_tbl.output.processed_tbl if config["run_differential"] else rules.tx_to_le_quant.output.ppau,
+        rules.process_dexseq_tbl.output if config["run_differential"] else rules.tx_to_le_quant.output.ppau,
         rules.tx_to_le_quant.output.counts,
         os.path.join(DAPA_SUBDIR,
                      "summarised_pas_quantification.tpm.tsv"),
@@ -78,20 +90,3 @@ rule all:
         #        sample=SAMPLES,
         #        ),
 
-
-
-# def get_stringtie_assembled(sample, output_dir):
-#     '''
-#     Return path to target StringTie transcriptome assembly
-#
-#     Want functionality to provide a range of parameter values in same pipeline
-#     and Snakemake's Paramspace docs aren't quite cutting it right now...
-#
-#     If provide a list for given parameter, will perform assembly for each combo of values
-#     min_isoform_fraction_abundance (-f)
-#     min_junction_reads (-j)
-#     min_transcript_coverage (-c) (minimum reads per bp coverage)
-#     To be added: disable_end_trimming (-t), point-features (--ptf)
-#     '''
-#
-#     if isinstance(list(), config["min_isoform_fraction_abundance"]):
