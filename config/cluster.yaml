@@ -100,3 +100,8 @@ tx_to_le_quant:
   h_rt:  4:00:00
   submission_string: " "
 
+dexseq_apa:
+  h_vmem: 10G
+  tmem: 10G
+  submission_string: "-pe smp 2 -R y"
+  h_rt: 12:00:00
