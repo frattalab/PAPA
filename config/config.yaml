@@ -317,11 +317,8 @@ min_relative_usage: 0.05
 dexseq_formula_full: "~ sample_name + exon + condition:exon"
 dexseq_formula_reduced: "~ sample_name + exon"
 
-# Number of threads to use for SatuRn analysis
-saturn_threads: 2
+# Number of threads to use for DEXSeq analysis
 dexseq_threads: 2
-
-
 
 #####-----------------------------------------
 # OUTPUT SUBDIRECTORY NAMES
