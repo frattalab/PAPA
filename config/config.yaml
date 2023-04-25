@@ -68,7 +68,7 @@ pre_stringtie_processing: "none"
 # If False, pipeline jumps to generating a GTF of last exons from the reference input only
 run_identification: True
 
-# Whether to run differential usage analysis with SatuRn - bool
+# Whether to run differential usage analysis with DEXSeq - bool
 # If False, pipeline terminates after generating matrices of summarised quantification for each 'last exon isoform'
 run_differential: True
 
@@ -79,7 +79,7 @@ use_provided_novel_les: False
 # Whether to use pre-computed salmon index to quantify samples. Useful if wish to quantify multiple datasets with a common annotation and wish to save on unnecessary computation
 # Note: If set to True, run_identification will be overriden
 # Note: You will also need to provide the tx2le, tx2gene, le2gene and 'info' tables produced for the same run.
-use_precomputed_salmon_index: True
+use_precomputed_salmon_index: False
 
 
 ###
@@ -308,8 +308,17 @@ precomputed_info_tbl: "tests/dryruns/novel_ref_combined.info.tsv"
 # Default: 10
 min_mean_count: 10
 
-# Number of threads to use for SatuRn analysis
-saturn_threads: 2
+# Minimum mean relative usage of an isoform in either base/contrast condition for it to be retained for differential usage analysis
+# see https://doi.org/10.1186/s13059-015-0862-3
+# Note: provide value in fractional terms (i.e. between 0 & 0.5)
+min_relative_usage: 0.05
+
+
+dexseq_formula_full: "~ sample_name + exon + condition:exon"
+dexseq_formula_reduced: "~ sample_name + exon"
+
+# Number of threads to use for DEXSeq analysis
+dexseq_threads: 2
 
 #####-----------------------------------------
 # OUTPUT SUBDIRECTORY NAMES

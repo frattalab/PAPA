@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
 snakemake -p \
-	--configfile="config/test_data_config.yaml" \
+	--configfile $1 \
 	--use-conda \
-	--cores 1
+	--cores 2

@@ -3,19 +3,19 @@ suppressPackageStartupMessages(library(optparse))
 option_list <- list(make_option(c("-i", "--input-tsv"),
                                 type="character",
                                 dest = "results",
-                                help="Path to <prefix>.results.tsv file storing results table from SatuRn differential usage analysis (output by run_differential_usage.R)"),
+                                help="Path to <prefix>.results.tsv file storing results table from DEXSeq differential usage analysis (output by run_dexseq.R)"),
                     make_option(c("-a","--annot-info"),
-                                type="character",
-                                dest="annot_info",
+                                type = "character",
+                                dest = "annot_info",
                                 help = "Path to <prefix>.info.tsv file storing last exon ID annotation information (output by get_combined_quant_gtf.py)"),
-                    make_option(c("-p", "--ppau"),
+                    make_option(c("-p","--ppau"),
                                 type="character",
                                 help = "path to <prefix>.ppau.tsv file storing matrix of sample and condition-wise PPAU values for each last exon isoform"),
                     make_option(c("-o", "--output-prefix"),
                                 type = "character",
                                 dest = "output_prefix",
                                 default="differential_usage.results",
-                                help = "Prefix to name of augmented SatuRn results output table <prefix>.processed.tsv (default = %default)")
+                                help = "Prefix to name of augmented DEXSeq results output table <prefix>.processed.tsv (default = %default)")
 )
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -32,34 +32,18 @@ info_path <- opt$annot_info
 ppau_path <- opt$ppau
 output_prefix <- opt$output_prefix
 
+
+suppressPackageStartupMessages(library(readr))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(tidyr))
-suppressPackageStartupMessages(library(purrr))
 
 
-# read in input files
+###
 
 # satuRn results table
-res <- read.table(file = res_path,
-                  header = TRUE,
-                  sep = "\t",
-                  stringsAsFactors = F
-                  )
-
-info <- read.table(file = info_path,
-                  header = TRUE,
-                  sep = "\t",
-                  stringsAsFactors = F
-                  )
-
-ppau <- read.table(file = ppau_path,
-                   header = TRUE,
-                   sep = "\t",
-                   stringsAsFactors = F
-)
-
-# isoform_id is equivalent to le_id - rename to match with info
-res <- rename(res, le_id = isoform_id)
+res <- read_tsv(res_path)
+info <- read_tsv(info_path)
+ppau <- read_tsv(ppau_path)
 
 # info_path has mixed case column names - convert all to lower case to make tidier
 info <- rename_with(info, tolower)
@@ -67,11 +51,8 @@ info <- rename_with(info, tolower)
 # reorder cols so coordinate info comes at the end (just move annot_status before chromosome)
 info <- relocate(info, annot_status, .before = chromosome)
 
-# TODO: only interested in le_ids analysed by satuRn - should subset for these only
+# TODO: only interested in le_ids analysed by DEXSeq - should subset for these only (e.g. sufficient expression)
 info <- filter(info, le_id %in% pull(res, le_id))
-
-# The same le_id can have multiple transcripts (& multiple coords) contributing to it
-# Collapse these to a single row for each LE (saves the results table getting over-duplicated)
 
 # vector of colnames from info that expect to have a single value for each le_id
 exp_uniq_cols <- c("gene_id", "gene_name", "event_type", "annot_status", "chromosome", "strand")
@@ -144,10 +125,9 @@ res_jned <- left_join(res_jned,
                       select(ppau, le_id, starts_with("mean"), starts_with("delta")),
                       by = "le_id")
 
-write.table(x = res_jned,
-            file = paste(output_prefix, ".processed.tsv", sep = ""),
-            sep = "\t",
-            col.names = T,
-            row.names = F, 
-            quote = F
-            )
+
+
+# Sort so proximal site always comes first for each gene. Also put significant genes at top of table for quick easy browsing
+res_jned <- arrange(res_jned, gene.qvalue, gene_id, le_id)
+
+write_tsv(res_jned, file = paste(output_prefix, ".processed.tsv", sep = ""), col_names = T)
