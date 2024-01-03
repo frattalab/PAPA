@@ -128,7 +128,7 @@ When `run_identification` is set to False, a reference 'last exon-ome' must stil
 #### 3. Use a pre-computed Salmon index (+ last exon metadata) from a previous PAPA run
 
 - Set `use_precomputed_salmon_index` to True
-- Provide paths to computed last exon metadata `tx2le`, `tx2gene`, `le2gene` and `info` parameters
+- Provide paths to computed last exon metadata to `tx2le`, `tx2gene`, `le2gene` and `info` parameters
 
 ## Compatible data
 
