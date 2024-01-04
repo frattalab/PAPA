@@ -54,7 +54,7 @@ The pipeline is modular and has several different run modes. Please see [workflo
 Sample information and input file relationships are defined in a CSV sample sheet with the following columns (an example can be found at `config/test_data_sample_tbl.csv`):
 
 - `sample_name` - unique identifier for sample. Identifiers **must not** contain hyphen characters (i.e. '-')
-- `condition` - key to group samples of the same condition of interest (e.g. 'control' or 'knockdown')
+- `condition` - key to group samples of the same condition of interest (e.g. 'control' or 'knockdown'). Note that first value in the first row is considered the 'base' condition/denominator for differential usage analysis.
 - `path` - path to BAM file containing aligned reads for given sample. BAM files should be **coordinate sorted** and have a corresponding BAI index file at the same location (suffixed with '.bai')
 - `fastq1` - path to FASTQ file storing 1st mates of read pairs aligned for same sample
 - `fastq2` - path to FASTQ file storing 2nd mates of read pairs aligned for same sample. If dataset is single-end, leave this field blank
