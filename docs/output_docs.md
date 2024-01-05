@@ -109,13 +109,7 @@ The coordinates follow standard GTF convention. The attribute fields are identic
 - `exon_number` - gene ID for interval computed by Stringtie (if novel) or extracted from reference GTF (if annotated)
 - `Start_ref` - Start coordinate(s) of matching reference exon (if an extension event) or intron (if a 'spliced' event). If multiple matching reference exons, the coordinates are comma separated
 - `End_ref` - End coordinate(s) of matching reference exon (if an extension event) or intron (if a 'spliced' event). If multiple matching reference exons, the coordinates are comma separated
-- `event_type` - inferred 'event type' for novel last exon isoform. Can take on the following values:
-  - *first_exon_spliced* - most gene-proximal distinct last exon (i.e. it is the 'shortest' last exon isoform)
-  - *internal_exon_spliced* - distinct last exon that is not most proximal/distal with respect to gene
-  - *last_exon_spliced* - most gene-distal last exon
-  - *first_exon_extension* - novel 3'end extension of an annotated first exon (i.e. a 'composite' or 'bleedthrough' event)
-  - *internal_exon_extension* - novel 3'end extension of an annotated internal exon (i.e. a 'composite' or 'bleedthrough' event)
-  - *last_exon_extension* - novel 3'end extension of an annotated last exon (i.e. a 3'UTR extension)
+- `event_type` - inferred 'event type' for last exon isoform. See above mentions for description of possible values
 - `gene_name` - Only present if interval originates from annotation. Redundant with *ref_gene_name*
 - `region_rank` - takes on *first*, *internal* or *last*, based on the position of the last exon isoform in the gene (first = 5'most, last = 3'most)
 - `transcript_id_ref` - Only present if interval originates from annotation. Redundant with *transcript_id*
@@ -129,11 +123,42 @@ Assorted notes:
 
 - This file can contain duplicated intervals (annotated or novel), including those with closely spaced 3'ends (likely the result of imprecise cleavage). I am likely to address this in future releases.
 
+### ID mapping files - novel_ref_combined.tx2gene.tsv, novel_ref_combined.tx2le.tsv, novel_ref_combined.le2gene.tsv, novel_ref_combined.le2genename.tsv
+
+All the following files follow a common structure, with columns denoting the 'identifier type':
+
+- `novel_ref_combined.tx2gene.tsv` - transcript ID and gene ID
+  - *transcript_id* - corresponds to transcript_id key from attribute field in combined GTFs
+  - *gene_id* - corresponds to ref_gene_id key from attribute field in combined GTFs
+- `novel_ref_combined.tx2le.tsv` - transcript ID and 'le_id'
+  - *transcript_id* - corresponds to transcript_id key from attribute field in combined GTFs
+  - *le_id* - corresponds to le_id in combined GTFs
+- `novel_ref_combined.le2gene.tsv` - le_id and gene ID
+  - *le_id* - corresponds to le_id in combined GTFs
+  - *gene_id* - corresponds to ref_gene_id key from attribute field in combined GTFs
+- `novel_ref_combined.le2genename.tsv` - le_id and gene name
+  - *le_id* - corresponds to le_id in combined GTFs
+  - *gene_name* - corresponds to ref_gene_name key from attribute field in combined GTFs
+
+### Metadata for all last exon isoforms - novel_ref_combined.info.tsv
+
+Simplified table containing metadata for each unique transcript in combined GTF. Note that present columns are not considered stable and may change in future releases:
+
+- `transcript_id` -assigned unique transcript ID. Corresponds to transcript_id key from attribute field in combined GTFs
+- `le_id` - assigned last exon identifier. Corresponds to le_id key from attribute field in combined GTFs
+- `gene_id` - assigned reference gene ID. Corresponds to ref_gene_id key from attribute field in combined GTFs
+- `gene_name` - assigned reference gene name. Corresponds to ref_gene_name key from attribute field in combined GTFs
+- `event_type` - inferred 'event type' for last exon isoform. See above mentions for description of possible values
+- `Chromosome` - reference chromosome sourced from combined GTF
+- `Start` - Start coordinate sourced from combined GTF
+- `End` - End coordinate sourced from combined GTF
+- `Strand` - genomic strand sourced from combined GTF
+- `annot_status` - Whether event originates from reference annotation ('annotated') or predicted last exons ('novel')
 
 ## differential_apa
 
 ```bash
-tree test_data_output/differential_apa/
+$ tree test_data_output/differential_apa/
 test_data_output/differential_apa/
 ├── dexseq_apa.image.RData
 ├── dexseq_apa.results.processed.tsv
@@ -182,13 +207,7 @@ The following metadata columns are appended by the pipeline:
 - `contrast_name` - Name of experimental constrast tested, corresponds to `<numerator_condition>vs<denominator_condition>` where numerator and denominator conditions correspond to keys in the 'condition' column of the sample table
 - `gene_id` - gene id extracted for reference annotation
 - `gene_name` - gene name extracted from reference annotation
-- `event_type` - inferred 'event type' for last exon isoform. Can take on the following values:
-  - *first_exon_spliced* - most gene-proximal distinct last exon (i.e. it is the 'shortest' last exon isoform)
-  - *internal_exon_spliced* - distinct last exon that is not most proximal/distal with respect to gene
-  - *last_exon_spliced* - most gene-distal last exon
-  - *first_exon_extension* - novel 3'end extension of an annotated first exon (i.e. a 'composite' or 'bleedthrough' event)
-  - *internal_exon_extension* - novel 3'end extension of an annotated internal exon (i.e. a 'composite' or 'bleedthrough' event)
-  - *last_exon_extension* - novel 3'end extension of an annotated last exon (i.e. a 3'UTR extension)
+- `event_type` - inferred 'event type' for last exon isoform. See above mentions for description of possible values
 - `annot_status` - whether event originates from reference annotation or novel events
 - `transcript_id` - transcript ID extracted from reference annotation (if annotated) or defined by StringTie
 - `chromosome` - chromosome of origin
