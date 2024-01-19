@@ -143,3 +143,8 @@ When `run_identification` is set to False, a reference 'last exon-ome' must stil
   - Reference polyA site BED file can contain 'cluster' coordinates (i.e. not be a single nucloetide), but this can cause some duplication in predicted last exons within a condition. This should not affect quantification/differential usage severely (closely spaced polyA sites are annotated to the same last exon isoform), but can be make life more difficult if you want to extract coordinates for downstream analysis.
     - If multiple 3'ends overlap with a cluster interval, their coordinates will not be updated. This can mean you will have multiple closely spaced 3'end intervals predicted for the same event.
     - When clusters are provided, the nearby predicted last exons will have their 3'ends updated to the End coordinate of the cluster (i.e. not necessarily the most expressed/frequent coordinate within a cluster).
+
+
+## License
+
+Because Salmon is a core dependency and distributed under the [GNU General Public License v3.0 (GPLv3) licence](https://github.com/COMBINE-lab/salmon/blob/master/LICENSE), PAPA is also licensed under GPLv3 [reference Open Source Guide](https://opensource.guide/legal/#which-open-source-license-is-appropriate-for-my-project).
