@@ -32,7 +32,7 @@ annotation_gtf: tests/test_annotations/test_transcripts_reference.gtf
 
 # Optional GTF containing additional last exons to combine with reference GTF for quantification
 # e.g. combined PAPA output last exons from multiple datasets
-# Note this must have 'event_type', 'gene_id', 'transcript_id' annotations (i.e. conform to output of combine_novel_last_exons.py/ output of run_identification for a single dataset)
+# Note this must have 'event_type', 'gene_id', 'transcript_id' annotations (i.e. conform to output of combine_novel_last_exons.py/output of run_identification for a single dataset)
 # See docs for more details
 # Path to novel last exon GTF (can be left as empty string if not using this)
 input_novel_gtf: "tests/test_annotations/test_empty_novel_les.gtf"
@@ -251,14 +251,6 @@ max_fraction_multi_mapped: 0.95
 # String
 # DO NOT CHANGE THIS UNTIL ISSUE #40 us resolved - https://github.com/frattalab/PAPA/issues/40
 label: "PAPA"
-
-# # Merge parameters
-# # I think these are no longer used...
-# min_length_merge: 50
-# min_cov_merge: 0
-# min_fpkm_merge: 0
-# min_tpm_merge: 0
-# min_iso_frac_merge: 0.01
 
 # True/False (no quotes)
 keep_retained_introns_merge: False
