@@ -147,4 +147,4 @@ When `run_identification` is set to False, a reference 'last exon-ome' must stil
 
 ## License
 
-Because Salmon is a core dependency and distributed under the [GNU General Public License v3.0 (GPLv3) licence](https://github.com/COMBINE-lab/salmon/blob/master/LICENSE), PAPA is also licensed under GPLv3 [reference Open Source Guide](https://opensource.guide/legal/#which-open-source-license-is-appropriate-for-my-project).
+Because Salmon is a core dependency and distributed under the [GNU General Public License v3.0 (GPLv3) licence](https://github.com/COMBINE-lab/salmon/blob/master/LICENSE), PAPA is also licensed under GPLv3 ([Open Source Guide](https://opensource.guide/legal/#which-open-source-license-is-appropriate-for-my-project)).
