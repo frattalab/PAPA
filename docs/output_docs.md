@@ -175,7 +175,7 @@ The main output files of note are the metadata-augmented dexseq results table (`
 
 ### Differential usage output table - dexseq_apa.results.processed.tsv
 
-Example (`docs/eg_dexseq_apa.results.processed.tsv`):
+Example [eg_dexseq_apa.results.processed.tsv](eg_dexseq_apa.results.processed.tsv):
 
 | binID              | groupID       | featureID | exonBaseMean       | dispersion          | stat               | pvalue                | padj                  | group1             | group2             | log2fold_group2_group1 | le_id           | gene.qvalue | contrast_name  | gene_id       | gene_name  | event_type            | annot_status | transcript_id                                       | chromosome | strand | start     | end       | mean_PPAU_group1   | mean_PPAU_group2    | delta_PPAU_group2_group1 |
 |--------------------|---------------|-----------|--------------------|---------------------|--------------------|-----------------------|-----------------------|--------------------|--------------------|------------------------|-----------------|-------------|----------------|---------------|------------|-----------------------|--------------|-----------------------------------------------------|------------|--------|-----------|-----------|--------------------|---------------------|--------------------------|
@@ -220,7 +220,7 @@ The following metadata columns are appended by the pipeline:
 
 ### Count, TPM and % PolyA usage matrices - summarised_pas_quantification.*.tsv
 
-all isoform-level matrices follow the same basic structure. Example (`docs/eg_summarised_pas_quantification.counts.tsv`):
+all isoform-level matrices follow the same basic structure. Example [eg_summarised_pas_quantification.counts.tsv](eg_summarised_pas_quantification.counts.tsv):
 
 | le_id           | gene_id       | group1_sample_01 | group1_sample_02 | group1_sample_03 | group2_sample_04 | group2_sample_05 | group2_sample_06 |
 |-----------------|---------------|------------------|------------------|------------------|------------------|------------------|------------------|
