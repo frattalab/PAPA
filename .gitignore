@@ -1,4 +1,3 @@
-
 *.log
 .snakemake/.DS_Store
 .DS_Store
@@ -12,3 +11,13 @@ data/annotation/
 data/Cont*
 data/TDP43*
 scripts/.ipynb_checkpoints/
+.Rproj.user
+test_data_output*
+tests/test_aligned/STAR_aligned/*.out
+tests/test_aligned/STAR_aligned/*.out.t*
+tests/test_aligned/STAR_aligned/*_STAR*
+tests/test_aligned/fastp_trimmed/*
+tests/test_aligned/logs/*
+tests/test_aligned/qc/*
+tests/test_aligned/salmon_quant/*
+debug*

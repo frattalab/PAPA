@@ -4,33 +4,39 @@ __default__:
   h_rt:  2:00:00
   submission_string: " "
 
+filter_ref_gtf:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  4:00:00
+  submission_string: " "
+
 stringtie:
   h_vmem: 14G
   tmem: 14G
   h_rt:  8:00:00
   submission_string: " "
 
-intron_chain_filter:
+get_novel_last_exons:
   h_vmem: 10G
   tmem: 10G
   h_rt:  8:00:00
   submission_string: " "
 
 transcript_filtering_tpm:
-  h_vmem: 8G
-  tmem: 8G
+  h_vmem: 12G
+  tmem: 12G
   h_rt:  8:00:00
   submission_string: " "
 
-transcript_filtering_chain_3p:
-  h_vmem: 14G
-  tmem: 14G
+transcript_filtering_3p:
+  h_vmem: 12G
+  tmem: 12G
   h_rt:  8:00:00
   submission_string: " "
 
 three_end_filter:
-  h_vmem: 6G
-  tmem: 6G
+  h_vmem: 8G
+  tmem: 8G
   h_rt:  4:00:00
   submission_string: " "
 
@@ -40,9 +46,21 @@ merge_by_condition:
   h_rt:  4:00:00
   submission_string: " "
 
-merge_filtered_with_ref:
-  h_vmem: 6G
-  tmem: 6G
+combine_novel_by_condition:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  4:00:00
+  submission_string: " "
+
+combine_novel_filtered_by_condition:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  4:00:00
+  submission_string: " "
+
+get_combined_quant_gtf:
+  h_vmem: 8G
+  tmem: 8G
   h_rt:  4:00:00
   submission_string: " "
 
@@ -67,5 +85,23 @@ salmon_index:
 salmon_quant_pe:
   h_vmem: 14G
   tmem: 14G
+  submission_string: "-pe smp 2 -R y"
+  h_rt: 12:00:00
+
+salmon_quant_se:
+  h_vmem: 12G
+  tmem: 12G
+  submission_string: "-pe smp 2 -R y"
+  h_rt: 12:00:00
+
+tx_to_le_quant:
+  h_vmem: 8G
+  tmem: 8G
+  h_rt:  4:00:00
+  submission_string: " "
+
+dexseq_apa:
+  h_vmem: 10G
+  tmem: 10G
   submission_string: "-pe smp 2 -R y"
   h_rt: 12:00:00

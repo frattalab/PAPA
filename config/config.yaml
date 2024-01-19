@@ -4,16 +4,16 @@
 
 # Path to main (top-level) output directory storing results for this run
 #MUST END WITH SLASH
-main_output_dir: 2021-08-23_two_sample_example_output/
+main_output_dir: test_data_output/
 
 # PATH to CSV sample table linking samples to corresponding BAM, FASTQ files etc.
 # 1 row per sample, 4 columns ('<column name>': <description>):
-# 'sample_name': unique identifier for sample
+# 'sample_name': unique identifier for sample. Must not contain hyphen characters (i.e. '-')
 # 'condition': key to group samples of the same condition of interest (e.g. ‘control’ or ‘knockdown’)
 # 'path': path to BAM file containing aligned reads for given sample. BAM files should be coordinate sorted and have a corresponding BAI index file at the same location (suffixed with ‘.bai’)
 # 'fastq1`': path to FASTQ file storing 1st mates of read pairs aligned for same sample
 # 'fastq2': path to FASTQ file storing 2nd mates of read pairs aligned for same sample
-sample_tbl: config/local_ward_ipsc_example_sample_tbl.csv
+sample_tbl: config/test_data_sample_tbl.csv
 
 # What is strandedness of library prep used in samples?
 # "--rf" - library is stranded with read 2 corresponding to transcribed strand ('fr-firststrand'/ 'reverse')
@@ -22,27 +22,39 @@ sample_tbl: config/local_ward_ipsc_example_sample_tbl.csv
 # Handy blog posts if unsure:
 # https://rnabio.org/module-09-appendix/0009/12/01/StrandSettings/
 # https://littlebitofdata.com/en/2017/08/strandness_in_rnaseq/
-strandedness: "--rf"
+strandedness: "--fr"
 
 # Path to GTF file of reference transcripts. Used to:
 # - Guide StringTie transcript assembly
 # - Match assembled transcripts to known splice junctions
 # - Quantify reference transcripts with Salmon
-annotation_gtf: data/annotation/gencode.v34.annotation.gtf
+annotation_gtf: tests/test_annotations/test_transcripts_reference.gtf
+
+# Optional GTF containing additional last exons to combine with reference GTF for quantification
+# e.g. combined PAPA output last exons from multiple datasets
+# Note this must have 'event_type', 'gene_id', 'transcript_id' annotations (i.e. conform to output of combine_novel_last_exons.py/output of run_identification for a single dataset)
+# See docs for more details
+# Path to novel last exon GTF (can be left as empty string if not using this)
+input_novel_gtf: "tests/test_annotations/test_empty_novel_les.gtf"
+
+# Reference GTF - treat 'transcript_id' values containing this string as if a novel extension (i.e. will be considered as a distinct isoform for summarising quantification and differential usage)
+# If not relevant leave as an empty string (i.e "") otherwise pipeline will raise an exception if not found in annotation_gtf
+ref_extensions_string: ""
 
 # Source of GTF file of reference transcripts ('annotation_gtf')
 # One of 'gencode' if GENCODE or "ensembl" for ENSEMBL other string
-# Used for Salmon index & scripts/filter_tx_by_intron_chain.py (for gene type filtering)
+# Used for Salmon index (for gene type filtering)
 annotation_source: "gencode"
 
 # Path to FASTA file containing genome sequence
 # An index file should also exist in same directory (suffixed with .fai)
-# Can be generated using samtools faidx
-genome_fasta: data/annotation/genome.fa
+# Can be generated using samtools faidx or pyfaidx
+# If not present pyfaidx will generate it when extracting sequence, but this will add a small amount to the runtime
+genome_fasta: tests/test_annotations/test_genome.fa
 
 # Path to BED file containing reference poly(A) site database
 # e.g. PolyASite atlas from 3'-end sequencing
-polya_site_atlas: data/annotation/atlas.clusters.2.0.GRCh38.96.chr_prefix.bed
+polya_site_atlas: tests/test_annotations/test_pas.bed
 
 #####-----------------------------------------
 ### GENERAL PIPELINE PARAMETERS
@@ -52,25 +64,49 @@ polya_site_atlas: data/annotation/atlas.clusters.2.0.GRCh38.96.chr_prefix.bed
 # Put "none" for now. Other options possibly added in future...
 pre_stringtie_processing: "none"
 
+# Whether to run steps to identify novel last exons with a combination of StringTie, PolyASite and PAS motif searching
+# If False, pipeline jumps to generating a GTF of last exons from the reference input only
+run_identification: True
+
+# Whether to run differential usage analysis with DEXSeq - bool
+# If False, pipeline terminates after generating matrices of summarised quantification for each 'last exon isoform'
+run_differential: True
+
+# Whether to use provided novel last exons (input_novel_gtf) as novel events to combine with reference GTF
+# Note: if set to True, input_novel_gtf must be a valid path and run_identification must also be set to True (this is a 'plumbing' workaround, identification of novel last exons from input data is not performed)
+use_provided_novel_les: False
+
+# Whether to use pre-computed salmon index to quantify samples. Useful if wish to quantify multiple datasets with a common annotation and wish to save on unnecessary computation
+# Note: If set to True, run_identification will be overriden
+# Note: You will also need to provide the tx2le, tx2gene, le2gene and 'info' tables produced for the same run.
+use_precomputed_salmon_index: False
+
+
 ###
 # Reference GTF filtering
 ###
 
 # True / False to switch on/off reference filtering
-filter_ref_gtf: True
+filter_ref_gtf: False
 
 # Specify which GTF entries to retain based on attribute keys & values
 # LHS key - name of attribute in GTF (this can vary between Gencode/Ensembl so double check)
 # e.g. gene_type in Gencode vs gene_biotype in Ensembl GTF
-ref_gtf_filters:
-  # put empty list [] if no filtering
-  gene_type: ["protein_coding", "lncRNA"]
-  # Minimum transcript support level for tx to be retained
-  # Put 'None' (no quotes) for no TSL filtering
-  transcript_support_level: 3
-  # 'tag' attribute - which tags should be included/excluded?
-  include_tags: []
-  exclude_tags: ["mRNA_end_NF"]
+ref_gtf_include_flags:
+    # put empty list [] if no filtering
+    gene_type: ["protein_coding", "lncRNA"]
+
+ref_gtf_exclude_flags:
+    # Leave empty for now...
+
+
+# Minimum transcript support level for tx to be retained
+# Put 'None' (no quotes) for no TSL filtering
+min_transcript_support_level: 3
+
+# 'tag' attribute - which tags should be included/excluded?
+include_tags: []
+exclude_tags: ["mRNA_end_NF"]
 
 ###
 # Expression filtering
@@ -82,36 +118,46 @@ ref_gtf_filters:
 min_mean_tpm: 1
 
 ###
-# Splice junction matching/filtering
+# Filtering putative novel last exons
 ###
 
-# when filtering assembled transcripts, valid should have intron chain match up until penultimate intron(s)
-# 'transcript' - NOT YET IMPLEMENTED - introns/splice junctions come from the same transcript
-# 'any' - matching introns/splice junctions can come from any transcript
-intron_chain_filter_mode: "any"
+# Whether to apply filtering at 5'end for matches with reference for extension events
+extension_tolerance_filter: True
 
-# Max number of consective 3'end non-matched introns for a transcript to be considered valid
-# Default: 2 (equivalent to allowing the penultimate exon of transcript to also be novel)
-max_terminal_non_match: 2
+# Tolerance window (nt) to match 5'ends of reference first exons & first exon extension events
+# Predicted 5'ends can be inprecise relative to annotation, this gives some leeway in matching these events
+first_exon_5p_tolerance: 100
+
+# Tolerance window (nt) to match 5'ends of reference exons & overlapping putative last exon (extension events)
+other_exon_5p_tolerance: 0
+
+# Whether to apply filtering at 5'end for exact matches between 5'ss of novel last SJ (intron) & reference SJ (intron)
+spliced_tolerance_filter: True
+
 
 # Minimum length of 3'end extension for novel 3'UTR extension events to be retained
-# Applied to 'internal_exon_bleedthrough' & 'ds_3utr_extension' events
 # Default: 100
 min_extension_length: 100
 
-# Number of threads/cpus for scripts/filter_tx_by_intron_chain.py
-# Default: 1
-intron_chain_filter_threads: 1
 
 ###
 # 3'end transcript filtering
 ###
+
+# Whether to apply filtering of candidate novel last exons at their 3'ends for polyA signal motifs or reference polyA sites
+three_end_filter: True
 
 # Maximum distance between predicted 3'end and nearest polya_site_atlas site for a transcript to be retained
 max_atlas_distance: 100
 
 # Length of region from 3'end (to upstream) to search for presence of polyA signal motifs
 motif_search_region_length: 100
+
+# Expected distance upstream from 3'end for polyA signal motifs (typically enriched ~20nt upstream
+# from cleavage site). If a last exon has multiple found motifs, the 3'end with a motif closest to
+# this value will be selected as the representative 3'end.
+# default: 21
+motif_expected_distance: 21
 
 # Which poly(A) signal motifs to use to retain 3'ends with evidence of genuine cleavage event
 # 'Gruber' - 18 conserved motifs (mouse and human) identified by Gruber et al., 2016
@@ -120,32 +166,12 @@ motif_search_region_length: 100
 polya_signal_motifs: "Gruber"
 
 
-###
-# Summarising polyA site expression
-###
-
-# How to summarise transcript abundance to polyA site isoforms for each gene
-# 'polyA' - sum expression of transcripts if they share a poly(A) site
-# 'last_exon' - sum expression if they share a last exon (any overlap). 3'UTR extension events will be considered as separate last exons
-expression_merge_by: "last_exon"
-
-# Target window size (nt) for merging closely spaced polyA sites to a single polyA cluster
-# Window is centred on 3'end of each transcripts -
-# PyRanges considers polyA sites as 1nt length intervals
-# pas_merge_window_size - 1 is extended EITHER direction of each polyA site
-pas_merge_window_size: 25
-
-
-
 #####-----------------------------------------
 ## STRINGTIE OPTIONS/PARAMETERS
 #####-----------------------------------------
 
-
-# Path to df containing Stringtie parameter values to try (1 combo per row)
-# -j, -f, -c, -t are defined here
-# NOT YET IMPLEMENTED - IGNORE THIS
-stringtie_params_csv: config/stringtie_params.csv
+# Consult StringTie documentation for further descriptions of parameters. Generally PAPA sticks to default StringTie parameters
+# TODO: *Insert link to documentation*
 
 # Use annotated poly(A) sites to help guide transcript assembly?
 # activates '--ptf' option
@@ -156,10 +182,10 @@ use_point_features: False
 # Columns are <chromosome> <coordinate> <strand> <type (TSS/CPAS)>
 # To generate, can use <scripts/bed_to_point_features.py> (currently just with PolyASite atlas v2)
 # Only needed if use_point_features is set to True
-point_features_path: data/atlas.cluster.2.0.GRCh38.96_point_features.chr_prefix.tsv
+point_features_path: data/elk1.ds_pas.ptf.tsv
 
 # Default: 0.01
-# can be a single value between 0-1 or a list of values [val1, val2]
+# float between 0-1
 min_isoform_fraction_abundance: 0.01
 
 # Default: 200
@@ -174,7 +200,6 @@ gene_abundances_suffix: ".gene_abundances.tsv"
 # True or False (NO QUOTES)
 # StringTie Default: False
 # PAPA Default: False
-# Note: this is currently broken if multiple StringTie parameter combos are defined
 report_covered_annot_txipts: False
 covered_txipts_suffix: ".annotated.fully_covered.gtf"
 
@@ -187,7 +212,6 @@ min_junction_overhang: 10
 # Junctions should have at least n spliced reads aligning across it
 # Can be a fraction
 # float
-# can be a single value starting from 1 or a list of values [val1, val2]
 # Default: 1
 min_junction_reads: 1
 
@@ -199,7 +223,6 @@ disable_end_trimming: False
 
 # Minimum coverage for predicted transcripts to be reported in output
 # float
-# can be a single value starting from 1 or a list of values [val1, val2]
 # Default: 1
 min_txipt_coverage: 1
 
@@ -226,15 +249,8 @@ max_fraction_multi_mapped: 0.95
 
 # prefix for name of output transcripts (passed to <-l>)
 # String
+# DO NOT CHANGE THIS UNTIL ISSUE #40 us resolved - https://github.com/frattalab/PAPA/issues/40
 label: "PAPA"
-
-# Merge parameters
-# I think these are no longer used...
-min_length_merge: 50
-min_cov_merge: 0
-min_fpkm_merge: 0
-min_tpm_merge: 0
-min_iso_frac_merge: 0.01
 
 # True/False (no quotes)
 keep_retained_introns_merge: False
@@ -251,7 +267,50 @@ salmon_quant_threads: 2
 
 salmon_kmer_size: 31
 
+# additional command line arguments to pass to salmon quant. This should be a list of exact strings of command line flags
+# to pass no additional flags, simply provide a list with an empty string (e.g. [""])
+salmon_quant_extra_params: ["--gcBias", "--seqBias"]
 
+# Path to directory containing pre-computed salmon index
+# Note: only used if use_precomputed_salmon_index is set to True
+precomputed_salmon_index: "tests/dryruns/salmon_index/"
+
+#####-----------------------------------------
+### DIFFERENTIAL USAGE OPTIONS/PARAMETERS
+#####-----------------------------------------
+
+# NOTE: the following parameters (up until next NOTE) are ignored is use_precomputed_salmon_index is set to False
+
+# Path to precomputed '<dir>/novel_ref_combined.tx2le.tsv'. Must be from the same run that generated precomputed salmon index
+precomputed_tx2le: "tests/dryruns/novel_ref_combined.tx2le.tsv"
+
+# Path to precomputed '<dir>/novel_ref_combined.tx2gene.tsv'. Must be from the same run that generated precomputed salmon index
+precomputed_tx2gene: "tests/dryruns/novel_ref_combined.tx2gene.tsv"
+
+# Path to precomputed '<dir>/novel_ref_combined.le2gene.tsv'. Must be from the same run that generated precomputed salmon index
+precomputed_le2gene: "tests/dryruns/novel_ref_combined.le2gene.tsv"
+
+# Path to precomputed '<dir>/novel_ref_combined.info.tsv'. Must be from the same run that generated precomputed salmon index
+precomputed_info_tbl: "tests/dryruns/novel_ref_combined.info.tsv"
+
+
+# NOTE: all following parameters are ignored if 'run_differential' is set to False
+
+# Minimum mean count in any condition for an isoform to be retained for differential usage analysis
+# Default: 10
+min_mean_count: 10
+
+# Minimum mean relative usage of an isoform in either base/contrast condition for it to be retained for differential usage analysis
+# see https://doi.org/10.1186/s13059-015-0862-3
+# Note: provide value in fractional terms (i.e. between 0 & 0.5)
+min_relative_usage: 0.05
+
+
+dexseq_formula_full: "~ sample_name + exon + condition:exon"
+dexseq_formula_reduced: "~ sample_name + exon"
+
+# Number of threads to use for DEXSeq analysis
+dexseq_threads: 2
 
 #####-----------------------------------------
 # OUTPUT SUBDIRECTORY NAMES
@@ -260,6 +319,8 @@ salmon_kmer_size: 31
 # No need to change these unless you don't like them!
 
 stringtie_subdir_name: stringtie/
+tx_filtering_subdir_name: tx_filtering/
 salmon_subdir_name: salmon/
 logs_subdir_name: logs/
+benchmarks_subdir_name: benchmarks/
 diff_apa_subdir_name: differential_apa/
