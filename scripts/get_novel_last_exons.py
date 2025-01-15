@@ -449,9 +449,21 @@ def find_extension_events(novel_le,
                                                                            suffix
                                                                            )
                                            )
-        post_tol_ids = set(novel_le_ext.as_df()[id_col])
+        
+        try:
+            post_tol_ids = set(novel_le_ext.as_df()[id_col])
+        except KeyError:
+            # empty df/no extensions found
+            post_tol_ids = set()
 
         eprint(f"After 5'end match tolerance filter, number of events - {len(post_tol_ids)}")
+        if len(post_tol_ids) == 0:
+            # no extensions found, return empty pyranges
+            if return_filtered_ids:
+                # return tuple of empty gr & empty sets
+                return pr.PyRanges(), set(), set()
+            else:
+                return pr.PyRanges()
 
         if return_filtered_ids:
             end_5p_filt_ids = post_tol_ids - post_len_ids
