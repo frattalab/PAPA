@@ -720,6 +720,7 @@ def main(gtf_path,
     # eprint(le_combined_pass.columns)
 
     pass_ids = set(le_combined_pass.as_df()[le_id_col])
+    eprint(f"Number of events passing database/PAS motif filters - {len(pass_ids)}")
 
     #6. Generate 'match_stats' dataframe plus summary counts dfs
     # Subset to df of Tx_id, atlas_filter, motif_filter, atlas_distance & motifs_found
@@ -736,11 +737,16 @@ def main(gtf_path,
                "event_type"
                ]
 
-    fail_match_stats = (le.subset(lambda df: ~df[le_id_col].isin(pass_ids))
-                        .as_df()
-                        [ms_cols]
-                        .drop_duplicates(subset=["transcript_id"])
-                        )
+    fail_match_stats = le.subset(lambda df: ~df[le_id_col].isin(pass_ids))
+    # Subset to minimal output columns
+    if len(fail_match_stats) > 0:
+        fail_match_stats = (fail_match_stats
+                            .as_df()
+                            [ms_cols]
+                            .drop_duplicates(subset=["transcript_id"])
+                            )
+    else:
+        fail_match_stats = pd.DataFrame(columns=ms_cols)
 
     pass_match_stats = le_combined_pass.as_df()[ms_cols]
 
@@ -906,7 +912,7 @@ if __name__ == '__main__':
         pas_motifs = gruber_pas_motifs
 
     elif args.motifs.capitalize() == "Beaudoing":
-        pas_motifs = Beaudoing_pas_motifs
+        pas_motifs = beaudoing_pas_motifs
 
     elif os.path.exists(args.motifs):
         eprint(f"reading in pas motifs from file - {args.motifs}")
