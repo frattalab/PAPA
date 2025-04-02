@@ -106,8 +106,9 @@ def main(in_dir,
 
 
     # count number of experiments which have a given last exon (any overlap)
-    le_counts = combined.as_df()[["Cluster", "experiment_id"]].drop_duplicates().Cluster.value_counts()
-    le_counts = le_counts.reset_index().rename(columns={"Cluster": "experiment_count", "index": "Cluster"})
+    le_counts = combined.as_df()[["Cluster", "experiment_id"]].drop_duplicates()
+    le_counts = le_counts.Cluster.value_counts()
+    le_counts = le_counts.reset_index().rename(columns={"count": "experiment_count"})
     print(le_counts.experiment_count.describe(percentiles=[i * 0.1 for i in range(0,11,1)]))
 
     combined = combined.apply(lambda df: df.merge(le_counts, on="Cluster", how="left"))
