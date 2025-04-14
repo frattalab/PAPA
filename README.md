@@ -1,5 +1,8 @@
 # PAPA - Pipeline Alternative polyadenylation (APA)
 
+[![DOI](https://zenodo.org/badge/380285846.svg)](https://doi.org/10.5281/zenodo.15210360)
+
+
 Snakemake pipeline for detection & quantification of novel last exons/polyadenylation events from bulk RNA-sequencing data
 
 The workflow (in brief) is as follows, but can be toggled depending on your use case:
