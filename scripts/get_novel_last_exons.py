@@ -449,9 +449,21 @@ def find_extension_events(novel_le,
                                                                            suffix
                                                                            )
                                            )
-        post_tol_ids = set(novel_le_ext.as_df()[id_col])
+        
+        try:
+            post_tol_ids = set(novel_le_ext.as_df()[id_col])
+        except KeyError:
+            # empty df/no extensions found
+            post_tol_ids = set()
 
         eprint(f"After 5'end match tolerance filter, number of events - {len(post_tol_ids)}")
+        if len(post_tol_ids) == 0:
+            # no extensions found, return empty pyranges
+            if return_filtered_ids:
+                # return tuple of empty gr & empty sets
+                return pr.PyRanges(), set(), set()
+            else:
+                return pr.PyRanges()
 
         if return_filtered_ids:
             end_5p_filt_ids = post_tol_ids - post_len_ids
@@ -522,6 +534,10 @@ def find_spliced_events(novel_li,
 
     # Only novel last SJs overlapping ref SJs kept
     novel_spliced = novel_li.join(ref_introns, strandedness="same", suffix=suffix)
+
+    if len(novel_spliced) == 0:
+        # no putative events found, return empty ranges
+        return pr.PyRanges()
 
     eprint(f"Number of putative novel spliced events - {_n_ids(novel_spliced, id_col)}")
     # eprint(f"ref exon ranks\n {novel_spliced.as_df()[rank_col].drop_duplicates()}")
@@ -777,47 +793,51 @@ def main(input_gtf_path,
 
     eprint(f"Complete - took {end - start} s")
 
-    # Spliced is last introns, want corresponding last exons in output
-    spliced_le = novel_le.subset(lambda df: df["transcript_id"].isin(set(spliced.transcript_id)))
+    if len(spliced) != 0:
+        # Spliced is last introns, want corresponding last exons in output
+        spliced_le = novel_le.subset(lambda df: df["transcript_id"].isin(set(spliced.transcript_id)))
 
-    # Want to retain metadata from matching reference regions
-    # These coordinates/metadata correspond to matching overlapping ref last intron/SJ
-    spliced = spliced[["transcript_id",
-                       "gene_id_ref",
-                       "transcript_id_ref",
-                       "gene_name", # comes from ref GTF, but not always gene_name in StringTie output ('ref_gene_name') will prefer matching from ref
-                       "Start_ref",
-                       "End_ref",
-                       "event_type"]]
+        # Want to retain metadata from matching reference regions
+        # These coordinates/metadata correspond to matching overlapping ref last intron/SJ
+        spliced = spliced[["transcript_id",
+                        "gene_id_ref",
+                        "transcript_id_ref",
+                        "gene_name", # comes from ref GTF, but not always gene_name in StringTie output ('ref_gene_name') will prefer matching from ref
+                        "Start_ref",
+                        "End_ref",
+                        "event_type"]]
 
-    # Add the _ref suffix so it's obvious the col came from the reference GTF
-    spliced = spliced.apply(lambda df: df.rename(columns={"gene_name": "gene_name_ref"}))
+        # Add the _ref suffix so it's obvious the col came from the reference GTF
+        spliced = spliced.apply(lambda df: df.rename(columns={"gene_name": "gene_name_ref"}))
 
-    spliced_cols = spliced.columns.tolist()
+        spliced_cols = spliced.columns.tolist()
 
-    # eprint(spliced_le.columns)
+        # eprint(spliced_le.columns)
 
-    spliced_le = spliced_le.apply_pair(spliced,
-                                       lambda df, df2:_pd_merge_gr(df,
-                                                                   df2.drop(columns=["Chromosome",
-                                                                                     "Start",
-                                                                                     "End",
-                                                                                     "Strand"
-                                                                                     ]
-                                                                            ),
-                                                                   how="left",
-                                                                   on="transcript_id",
-                                                                   suffixes=[None, "_spl"],
-                                                                   to_merge_cols=spliced_cols),
-                                       )
-    # eprint(spliced_le.columns)
+        spliced_le = spliced_le.apply_pair(spliced,
+                                        lambda df, df2:_pd_merge_gr(df,
+                                                                    df2.drop(columns=["Chromosome",
+                                                                                        "Start",
+                                                                                        "End",
+                                                                                        "Strand"
+                                                                                        ]
+                                                                                ),
+                                                                    how="left",
+                                                                    on="transcript_id",
+                                                                    suffixes=[None, "_spl"],
+                                                                    to_merge_cols=spliced_cols),
+                                        )
+        # eprint(spliced_le.columns)
 
-    # Since drop default cols from spliced, should have no cols with suffix
-    # spliced_le = spliced_le.drop(like="_spl$")
+        # Since drop default cols from spliced, should have no cols with suffix
+        # spliced_le = spliced_le.drop(like="_spl$")
 
-    # eprint(spliced_le.columns)
+        # eprint(spliced_le.columns)
 
-    combined = pr.concat([extensions, spliced_le])
+        combined = pr.concat([extensions, spliced_le])
+        
+    else:
+        combined = extensions
 
     # Finally, collapse metadata/duplicate attribute values for each last exon (transcript ID)
     # This can occur if same last exon matches to multiple reference transcripts/junctions
